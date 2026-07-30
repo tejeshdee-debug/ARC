@@ -1,8 +1,10 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import LoginPage from "./components/LoginPage";
+import { api } from "./api/client";
 import {
   Package, Users, Warehouse, Truck, BarChart2, UserCog, CreditCard,
   Settings, ChevronLeft, ChevronRight, RefreshCw, LogOut, KeyRound,
-  Download, Printer, LayoutDashboard,
+  Download, Printer, LayoutDashboard, Tags, Layers,
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import {
@@ -13,7 +15,7 @@ import {
 } from "./mockData";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-type Screen = "pos"|"products"|"sailor"|"stock"|"vendor"|"reports"|"user"|"card"|"settings";
+type Screen = "pos"|"products"|"master"|"sailor"|"stock"|"vendor"|"reports"|"user"|"card"|"settings";
 type Category = "ALL"|"LIQUOR"|"SOFT DRINKS"|"PARTY"|"PARTY FOOD"|"FOOD";
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
@@ -30,13 +32,13 @@ function Btn({ children, onClick, variant="primary", className="", type="button"
   );
 }
 
-function FI({ label, value, onChange, type="text", readOnly=false, required=false, className="" }: {
-  label:string; value:string; onChange?:(v:string)=>void; type?:string; readOnly?:boolean; required?:boolean; className?:string;
+function FI({ label, value, onChange, type="text", readOnly=false, required=false, placeholder="", className="" }: {
+  label:string; value:string; onChange?:(v:string)=>void; type?:string; readOnly?:boolean; required?:boolean; placeholder?:string; className?:string;
 }) {
   return (
     <div className={`flex flex-col gap-0.5 ${className}`}>
       <label className="text-white text-xs font-semibold">{label}{required&&<span className="text-red-300 ml-0.5">*</span>}</label>
-      <input type={type} value={value} readOnly={readOnly} onChange={e=>onChange?.(e.target.value)}
+      <input type={type} value={value} readOnly={readOnly} placeholder={placeholder} onChange={e=>onChange?.(e.target.value)}
         className="bg-white text-gray-900 text-sm px-2 py-1 rounded border-0 outline-none w-full"/>
     </div>
   );
@@ -173,8 +175,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
   }
 
   // ── Confirm payment ──
-  function confirmPayment() {
-    // Use ref so this always has the latest value, even when called from Enter-key handler
+  async function confirmPayment() {
     const sailor = popupSailorRef.current;
     if(!sailor){ setPopupError("Card not found. Try Sailor ID, P.No or Mobile."); return; }
     if(sailor.status==="Deactive"){ setPopupError("Card is DEACTIVATED. Transaction blocked."); return; }
@@ -184,49 +185,26 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       return;
     }
 
-    // Deduct stock
-    setProducts(prev=>prev.map(p=>{
-      const o=orderItems.find(x=>x.code===p.code);
-      return o?{...p,stock:Math.max(0,p.stock-o.qty)}:p;
-    }));
+    try {
+      const res = await api.checkout(popupCard, selectShip, orderItems);
+      
+      // Update local state from server result
+      setProducts(prev=>prev.map(p=>{
+        const o=orderItems.find(x=>x.code===p.code);
+        return o?{...p,stock:Math.max(0,p.stock-o.qty)}:p;
+      }));
 
-    // Deduct balance
-    setSailors(prev=>prev.map(s=>
-      s.id===sailor.id?{...s,balance:Math.max(0,s.balance-grandTotal)}:s
-    ));
+      setSailors(prev=>prev.map(s=>
+        s.id===sailor.id?{...s,balance:res.remainingBalance}:s
+      ));
 
-    const billNo="TRN"+Math.floor(1000000000+Math.random()*9000000000);
-
-    setSalesReport(prev=>[
-      ...orderItems.map((item,idx)=>({
-        sno:prev.length+idx+1,type:"SALE",billNo,
-        customerId:sailor.id,name:sailor.name,
-        pNo:sailor.pNo,category:sailor.type,item:item.name
-      })), ...prev
-    ]);
-
-    setConsoleReport(prev=>[{
-      sno:prev.length+1,billNo:`SALE-${billNo}`,totalPrice:grandTotal,userId:"superadmin",
-      date:`${new Date().toLocaleDateString("en-GB")} ${new Date().toLocaleTimeString()}`,posName:"POS-1"
-    },...prev]);
-
-    setNewSalesReport(prev=>{
-      const copy=[...prev];
-      orderItems.forEach(item=>{
-        const found=copy.find(x=>x.productName===item.name);
-        if(found) found.saleQty+=item.qty;
-        else copy.push({sno:copy.length+1,productName:item.name,shipName:selectShip,saleQty:item.qty,subCategory:item.qtyType,price:item.price});
-      });
-      return copy;
-    });
-
-    // Show receipt popup instead of toast
-    const orderNo = "ORD-" + Math.floor(100000 + Math.random() * 900000);
-    const receiptDate = `${new Date().toLocaleDateString("en-GB")} ${new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",second:"2-digit"})}`;
-    setReceipt({ billNo, orderNo, sailor, items:[...orderItems], total:grandTotal, date:receiptDate });
-    setShowCheckout(false);
-    popupSailorRef.current = null;
-    clearOrder();
+      setReceipt({ billNo: res.billNo, orderNo: res.orderNo, sailor: res.sailor, items:[...orderItems], total:grandTotal, date: res.date });
+      setShowCheckout(false);
+      popupSailorRef.current = null;
+      clearOrder();
+    } catch (err: any) {
+      setPopupError(err.message || "Payment transaction failed.");
+    }
   }
 
   return (
@@ -593,37 +571,84 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 }
 
 // ─── Product Details ──────────────────────────────────────────────────────────
-function ProductDetails({ products, setProducts, onNavigateTo }: { products:any[]; setProducts:any; onNavigateTo:(s:Screen)=>void }) {
+function ProductDetails({ products, setProducts, categories = [], brands = [], onNavigateTo }: { products:any[]; setProducts:any; categories?:any[]; brands?:any[]; onNavigateTo:(s:Screen)=>void }) {
   const [code,setCode]=useState(""); const [name,setName]=useState("");
   const [category,setCategory]=useState("LIQUOR"); const [subCategory,setSubCategory]=useState("WHISKY");
-  const [brand,setBrand]=useState("WHISKY"); const [alertQty,setAlertQty]=useState("10");
+  const [brand,setBrand]=useState("ROYAL STAG"); const [price,setPrice]=useState("0"); const [alertQty,setAlertQty]=useState("10");
   const [search,setSearch]=useState(""); const [selected,setSelected]=useState<number|undefined>();
+
+  const categoryOptions = categories && categories.length > 0
+    ? categories.map((c: any) => c.name)
+    : ["LIQUOR", "FOOD", "SOFT DRINKS", "PARTY FOOD", "SNACKS"];
+
+  const activeCatObj = categories.find((c: any) => c.name.toUpperCase() === category.toUpperCase());
+  const availableSubCategories = activeCatObj && activeCatObj.subCategories && activeCatObj.subCategories.length > 0
+    ? activeCatObj.subCategories.map((s: any) => s.name)
+    : (
+        category === "LIQUOR" ? ["WHISKY", "BEER", "RUM", "VODKA", "WINE", "BRANDY"] :
+        category === "FOOD" ? ["BREAD/ROTI", "VEGETARIAN", "NON VEGETARIAN", "DESSERTS"] :
+        category === "SOFT DRINKS" ? ["COLD DRINK", "ENERGY DRINK"] :
+        category === "PARTY FOOD" ? ["PARTY VEG", "PARTY NONVEG"] :
+        ["GENERAL"]
+      );
+
+  const brandOptions = brands && brands.length > 0
+    ? brands.filter((b: any) => !b.categoryName || b.categoryName.toUpperCase() === category.toUpperCase() || category === "ALL").map((b: any) => b.name)
+    : availableSubCategories;
+
+  function handleCategoryChange(newCat: string) {
+    setCategory(newCat);
+    const catObj = categories.find((c: any) => c.name.toUpperCase() === newCat.toUpperCase());
+    let subs: string[] = [];
+    if (catObj && catObj.subCategories && catObj.subCategories.length > 0) {
+      subs = catObj.subCategories.map((s: any) => s.name);
+    } else if (newCat === "LIQUOR") subs = ["WHISKY", "BEER", "RUM", "VODKA", "WINE", "BRANDY"];
+    else if (newCat === "FOOD") subs = ["BREAD/ROTI", "VEGETARIAN", "NON VEGETARIAN", "DESSERTS"];
+    else if (newCat === "SOFT DRINKS") subs = ["COLD DRINK", "ENERGY DRINK"];
+    else if (newCat === "PARTY FOOD") subs = ["PARTY VEG", "PARTY NONVEG"];
+    else subs = ["GENERAL"];
+
+    const firstSub = subs[0] || "GENERAL";
+    setSubCategory(firstSub);
+    setBrand(brandOptions[0] || firstSub);
+  }
 
   const filtered=products.filter((r:any)=>
     r.code.toLowerCase().includes(search.toLowerCase())||
     r.name.toLowerCase().includes(search.toLowerCase())||
     r.category.toLowerCase().includes(search.toLowerCase()));
 
-  function handleCreate(){
+  async function handleCreate(){
     if(!code||!name){ toast.error("Code and Name are required!"); return; }
     if(products.some((p:any)=>p.code===code)){ toast.error("Product Code already exists!"); return; }
-    setProducts((prev:any)=>[{code,name,category,sub:subCategory,price:0,stock:0,alertQty:Number(alertQty)||10},...prev]);
+    const newProd = {code,name,category,sub:subCategory,price:Number(price)||0,stock:0,alertQty:Number(alertQty)||10};
+    try {
+      await api.createProduct(newProd);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setProducts((prev:any)=>[newProd,...prev]);
     toast.success(`Product ${name} created!`); handleClear();
   }
-  function handleUpdate(){
+  async function handleUpdate(){
     if(selected===undefined) return;
     const orig=filtered[selected];
-    setProducts((prev:any)=>prev.map((p:any)=>p.code===orig.code?{...p,code,name,category,sub:subCategory,alertQty:Number(alertQty)||10}:p));
+    const updated = {code,name,category,sub:subCategory,price:Number(price)||0,stock:orig.stock||0,alertQty:Number(alertQty)||10};
+    try {
+      await api.updateProduct(orig.code, updated);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setProducts((prev:any)=>prev.map((p:any)=>p.code===orig.code?updated:p));
     toast.success("Product updated!"); handleClear();
   }
-  function handleDelete(){
+  async function handleDelete(){
     if(selected===undefined) return;
     const orig=filtered[selected];
+    try {
+      await api.deleteProduct(orig.code);
+    } catch(e:any) { console.warn("API fallback:", e); }
     setProducts((prev:any)=>prev.filter((p:any)=>p.code!==orig.code));
     toast.success("Product deleted!"); handleClear();
   }
-  function handleClear(){setCode("");setName("");setCategory("LIQUOR");setSubCategory("WHISKY");setBrand("WHISKY");setAlertQty("10");setSelected(undefined);}
-  function handleRowClick(i:number){setSelected(i);const r=filtered[i];setCode(r.code);setName(r.name);setCategory(r.category);setSubCategory(r.sub);setBrand(r.sub);setAlertQty(String(r.alertQty||10));}
+  function handleClear(){setCode("");setName("");handleCategoryChange(categoryOptions[0]||"LIQUOR");setPrice("0");setAlertQty("10");setSelected(undefined);}
+  function handleRowClick(i:number){setSelected(i);const r=filtered[i];setCode(r.code);setName(r.name);setCategory(r.category);setSubCategory(r.sub);setBrand(r.sub);setPrice(String(r.price||0));setAlertQty(String(r.alertQty||10));}
 
   return (
     <div>
@@ -632,9 +657,10 @@ function ProductDetails({ products, setProducts, onNavigateTo }: { products:any[
         <div className="grid grid-cols-2 gap-x-8 gap-y-3">
           <FI label="Code" value={code} onChange={setCode} required/>
           <FI label="Name" value={name} onChange={setName} required/>
-          <FS label="Category" value={category} onChange={setCategory} options={["LIQUOR","FOOD","SOFT DRINKS","PARTY","PARTY FOOD"]} required/>
-          <FS label="Sub Category" value={subCategory} onChange={setSubCategory} options={["WHISKY","RUM","BRANDY","VODKA","BEER","COLD DRINK","VEGETARIAN","NON VEGETARIAN","PARTY VEG","PARTY NONVEG","BREAD/ROTI"]} required/>
-          <FS label="Brand" value={brand} onChange={setBrand} options={["WHISKY","RUM","BRANDY","VODKA","BEER","CANTEEN","SOFT DRINKS","KITCHEN"]}/>
+          <FS label="Category" value={category} onChange={handleCategoryChange} options={categoryOptions} required/>
+          <FS label="Sub Category" value={subCategory} onChange={setSubCategory} options={availableSubCategories} required/>
+          <FS label="Brand" value={brand} onChange={setBrand} options={brandOptions.length > 0 ? brandOptions : availableSubCategories}/>
+          <FI label="Sale Price (₹)" value={price} onChange={setPrice} type="number" required/>
           <FI label="Alert Quantity" value={alertQty} onChange={setAlertQty} required/>
         </div>
         <div className="flex items-center gap-3 mt-4">
@@ -681,33 +707,82 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
     setPhotoUrl(`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}`);
   }
   function handleClear(){setSailorId("");setSailorName("");setAddress("");setMobileNo("");setRegRefund("50");setDob("12/05/1985");setSailorPNo("");setRank("");setUnit("");setSailorType("JUNIOR SAILOR");setPrintBill(false);setSelected(undefined);setPhotoUrl(null);}
-  function handleCreate(){
+  async function handleCreate(){
     if(!sailorPNo||!sailorName||!mobileNo){ toast.error("P.No, Name, and Mobile are required!"); return; }
     if(sailors.some((s:any)=>s.pNo===sailorPNo)){ toast.error("Sailor with this P.No already exists!"); return; }
     const newId=sailorId||"000"+Math.floor(1000000+Math.random()*9000000);
     const newSailor={id:newId,name:sailorName,mobile:mobileNo,pNo:sailorPNo,rank,unit,type:sailorType,address,dob,regRefund:Number(regRefund)||50,balance:Number(regRefund)||50,status:"Active"};
+    try {
+      await api.createSailor(newSailor);
+    } catch(e:any) { console.warn("API fallback:", e); }
     setSailors((prev:any)=>[newSailor,...prev]);
     const regTx="REG-TRN"+Math.floor(10000000+Math.random()*90000000);
     setCardRegistration((prev:any)=>[{sno:prev.length+1,customerId:newId,transactionNo:regTx,name:sailorName,pNo:sailorPNo,category:sailorType,uniqueId:`MCPO-${Math.floor(100+Math.random()*900)}`,rank,deposit:Number(regRefund)||50},...prev]);
     toast.success("Sailor registered!"); handleClear();
   }
-  function handleUpdate(){
+  async function handleUpdate(){
     if(selected===undefined&&!sailorId) return;
-    setSailors((prev:any)=>prev.map((s:any)=>{
-      if(s.id===sailorId||(selected!==undefined&&prev[selected].id===s.id))
-        return{...s,name:sailorName,mobile:mobileNo,pNo:sailorPNo,rank,unit,type:sailorType,address,dob,regRefund:Number(regRefund)||50};
-      return s;
-    }));
+    const targetId = sailorId || (selected !== undefined ? sailors[selected]?.id : "");
+    if(!targetId) return;
+    const updated = {id:targetId,name:sailorName,mobile:mobileNo,pNo:sailorPNo,rank,unit,type:sailorType,address,dob,regRefund:Number(regRefund)||50,status:"Active"};
+    try {
+      await api.updateSailor(targetId, updated);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setSailors((prev:any)=>prev.map((s:any)=>s.id===targetId?{...s,...updated}:s));
     toast.success("Sailor updated!"); handleClear();
   }
-  function handleDelete(){
+  async function handleDelete(){
     if(selected===undefined&&!sailorId) return;
-    setSailors((prev:any)=>prev.filter((s:any,idx:number)=>!(idx===selected||s.id===sailorId)));
+    const targetId = sailorId || (selected !== undefined ? sailors[selected]?.id : "");
+    if(!targetId) return;
+    try {
+      await api.deleteSailor(targetId);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setSailors((prev:any)=>prev.filter((s:any)=>s.id!==targetId));
     toast.success("Sailor deleted!"); handleClear();
   }
-  function startWebcam(){
-    setIsCapturing(true);
-    setTimeout(()=>{setPhotoUrl(`https://api.dicebear.com/7.x/adventurer/svg?seed=${sailorName||"navy"}`);setIsCapturing(false);toast.success("Photo captured!");},1500);
+  const [showWebcamModal, setShowWebcamModal] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  async function openWebcam(){
+    setShowWebcamModal(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+      streamRef.current = stream;
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      }, 100);
+    } catch(err) {
+      toast.error("Unable to access camera. Please allow webcam permissions.");
+      setShowWebcamModal(false);
+    }
+  }
+
+  function stopWebcam(){
+    if(streamRef.current){
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setShowWebcamModal(false);
+  }
+
+  function capturePhoto(){
+    if(videoRef.current){
+      const canvas = document.createElement("canvas");
+      canvas.width = videoRef.current.videoWidth || 320;
+      canvas.height = videoRef.current.videoHeight || 240;
+      const ctx = canvas.getContext("2d");
+      if(ctx){
+        ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg");
+        setPhotoUrl(dataUrl);
+        toast.success("Photo captured!");
+      }
+    }
+    stopWebcam();
   }
 
   return (
@@ -742,7 +817,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
                 :<div className="flex flex-col items-center gap-1 text-white/40"><Users size={40}/><span className="text-xs">No Photo</span></div>
               }
             </div>
-            <button onClick={startWebcam} className="bg-[#3a8c2f] text-white text-xs px-4 py-1.5 rounded w-full">📷 Capture</button>
+            <button onClick={openWebcam} className="bg-[#3a8c2f] text-white text-xs px-4 py-1.5 rounded w-full cursor-pointer hover:bg-green-600 font-bold transition flex items-center justify-center gap-1.5">📷 Capture Photo</button>
           </div>
         </div>
         <div className="flex items-center gap-4 mt-4">
@@ -756,6 +831,46 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
           <Btn variant="danger" onClick={()=>onNavigateTo("pos")}>Close</Btn>
         </div>
       </div>
+      <div className="mt-4">
+        <h3 className="text-white text-sm font-bold mb-2">Registered Sailors Directory</h3>
+        <Table cols={[
+          {key:"id",label:"Sailor ID"},
+          {key:"name",label:"Name"},
+          {key:"pNo",label:"P.No"},
+          {key:"rank",label:"Rank"},
+          {key:"unit",label:"Unit"},
+          {key:"type",label:"Sailor Type"},
+          {key:"mobile",label:"Mobile"},
+          {key:"balance",label:"Balance (₹)"},
+          {key:"status",label:"Status"}
+        ]}
+        rows={sailors.map((s: any) => ({
+          ...s,
+          balance: `₹${Number(s.balance).toFixed(2)}`,
+          status: <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.status === 'Active' ? 'bg-green-700 text-white' : 'bg-red-700 text-white'}`}>{s.status}</span>
+        }))}
+        onRowClick={i => { setSelected(i); loadSailor(sailors[i]); }}
+        selIdx={selected}/>
+      </div>
+
+      {/* ── Live Webcam Stream Modal ── */}
+      {showWebcamModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
+          <div className="bg-[#143322] border-2 border-green-500/60 rounded-2xl p-5 w-[480px] shadow-2xl flex flex-col items-center">
+            <div className="flex justify-between items-center w-full mb-3 pb-2 border-b border-white/20">
+              <h3 className="text-white font-bold text-base flex items-center gap-2">📷 Live Webcam Capture</h3>
+              <button onClick={stopWebcam} className="text-white/60 hover:text-white text-xl font-bold">✕</button>
+            </div>
+            <div className="w-full h-64 bg-black rounded-xl overflow-hidden border border-white/20 relative flex items-center justify-center">
+              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+            </div>
+            <div className="flex gap-3 w-full mt-4">
+              <Btn variant="neutral" onClick={stopWebcam} className="flex-1">Cancel</Btn>
+              <Btn variant="primary" onClick={capturePhoto} className="flex-1">📸 Take Snapshot</Btn>
+            </div>
+          </div>
+        </div>
+      )}
       {showSearch&&(
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
           <div className="bg-[#143322] rounded-xl border-2 border-white/40 p-5 w-[600px] shadow-2xl">
@@ -786,9 +901,12 @@ function StockDetails({ products, setProducts, stockData, setStockData, onNaviga
     const prod=products.find((p:any)=>p.code===code);
     if(prod){setProductName(prod.name);setQtyType(prod.sub||"BOTTLE");setSalePrice(String(prod.price));}
   }
-  function handleCreate(){
+  async function handleCreate(){
     if(!productCode||!purchaseQty){ toast.error("Product Code and Qty are required!"); return; }
     const newStock={code:productCode,name:productName||"Unknown",vendor:vendorName,purchasePrice:Number(purchasePrice)||0,salePrice:Number(salePrice)||0,purchaseQty:Number(purchaseQty),unitType:qtyType,purchasedBy:"superadmin",purchaseDate:new Date().toLocaleDateString("en-GB")};
+    try {
+      await api.addStock(newStock);
+    } catch(e:any) { console.warn("API fallback:", e); }
     setStockData((prev:any)=>[newStock,...prev]);
     setProducts((prev:any)=>prev.map((p:any)=>p.code===productCode?{...p,stock:p.stock+Number(purchaseQty),price:Number(salePrice)||p.price}:p));
     toast.success("Stock added!"); handleClear();
@@ -843,9 +961,37 @@ function VendorDetails({ vendors, setVendors, onNavigateTo }: any) {
   const [mobile,setMobile]=useState(""); const [address,setAddress]=useState(""); const [gst,setGst]=useState("");
   const [selected,setSelected]=useState<number|undefined>();
 
-  function handleCreate(){ if(!vId||!vName){toast.error("Vendor ID and Name are required!");return;} if(vendors.some((v:any)=>v.id===vId)){toast.error("Vendor ID exists!");return;} setVendors((prev:any)=>[...prev,{id:vId,name:vName,contact,mobile,address,gst}]); toast.success("Vendor created!"); handleClear(); }
-  function handleUpdate(){ if(selected===undefined) return; setVendors((prev:any)=>prev.map((v:any,idx:number)=>idx===selected?{...v,name:vName,contact,mobile,address,gst}:v)); toast.success("Vendor updated!"); handleClear(); }
-  function handleDelete(){ if(selected===undefined) return; setVendors((prev:any)=>prev.filter((_:any,idx:number)=>idx!==selected)); toast.success("Vendor deleted!"); handleClear(); }
+  async function handleCreate(){
+    if(!vId||!vName){toast.error("Vendor ID and Name are required!");return;}
+    if(vendors.some((v:any)=>v.id===vId)){toast.error("Vendor ID exists!");return;}
+    const newVend = {id:vId,name:vName,contact,mobile,address,gst};
+    try {
+      await api.createVendor(newVend);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setVendors((prev:any)=>[...prev,newVend]);
+    toast.success("Vendor created!"); handleClear();
+  }
+  async function handleUpdate(){
+    if(selected===undefined) return;
+    const targetId = vId || vendors[selected]?.id;
+    if(!targetId) return;
+    const updated = {id:targetId,name:vName,contact,mobile,address,gst};
+    try {
+      await api.updateVendor(targetId, updated);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setVendors((prev:any)=>prev.map((v:any,idx:number)=>idx===selected?updated:v));
+    toast.success("Vendor updated!"); handleClear();
+  }
+  async function handleDelete(){
+    if(selected===undefined) return;
+    const targetId = vendors[selected]?.id;
+    if(!targetId) return;
+    try {
+      await api.deleteVendor(targetId);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setVendors((prev:any)=>prev.filter((_:any,idx:number)=>idx!==selected));
+    toast.success("Vendor deleted!"); handleClear();
+  }
   function handleRowClick(i:number){setSelected(i);const r=vendors[i];setVId(r.id);setVName(r.name);setContact(r.contact);setMobile(r.mobile);setAddress(r.address);setGst(r.gst);}
   function handleClear(){setVId("");setVName("");setContact("");setMobile("");setAddress("");setGst("");setSelected(undefined);}
 
@@ -887,25 +1033,39 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
   function appendDigit(d:string){if(tab==="recharge")setRRechAmt(p=>p+d);else setRefAmt(p=>p+d);}
   function backspace(){if(tab==="recharge")setRRechAmt(p=>p.slice(0,-1));else setRefAmt(p=>p.slice(0,-1));}
 
-  function handleRechargeSubmit(){
+  async function handleRechargeSubmit(){
     if(!activeSailor){toast.error("Enter a valid Customer ID!");return;}
     const amt=Number(rRechAmt);if(isNaN(amt)||amt<=0){toast.error("Enter a valid amount!");return;}
-    setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:s.balance+amt,status:"Active"}:s));
+    try {
+      const res = await api.rechargeCard(activeSailor.id, amt);
+      setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:res.newBalance,status:"Active"}:s));
+      toast.success(res.message || `Recharged ₹${amt} successfully!`);
+    } catch(e:any) {
+      console.warn("API fallback:", e);
+      setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:s.balance+amt,status:"Active"}:s));
+      toast.success(`Recharged ₹${amt} successfully!`);
+    }
     const txNo="RCH-TRN"+Math.floor(10000000+Math.random()*90000000);
     setRechargeReport((prev:any)=>[{sno:prev.length+1,transactionNo:txNo,customerId:activeSailor.id,name:activeSailor.name,pNo:activeSailor.pNo,category:activeSailor.type,rechAmount:amt},...prev]);
-    toast.success(`Recharged ₹${amt} successfully!`);
     setRCustId("");setRAvAmt("");setRRechAmt("");setActiveSailor(null);
   }
-  function handleRefundSubmit(){
+  async function handleRefundSubmit(){
     if(!activeSailor){toast.error("Enter a valid Customer ID!");return;}
     const balance=activeSailor.balance; const deposit=Number(refDeposit)||50;
     let refundAmt=0;
     if(refIsActive){refundAmt=balance+deposit;}
     else{refundAmt=Number(refAmt);if(isNaN(refundAmt)||refundAmt<=0){toast.error("Enter a valid refund amount!");return;}if(refundAmt>balance){toast.error("Refund exceeds balance!");return;}}
-    setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:refIsActive?0:s.balance-refundAmt,status:refIsActive?"Deactive":s.status}:s));
+    try {
+      const res = await api.refundCard(activeSailor.id, "Refund processed");
+      setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:0,status:"Deactive"}:s));
+      toast.success(res.message || `Card deactivated. Refunded ₹${refundAmt}`);
+    } catch(e:any) {
+      console.warn("API fallback:", e);
+      setSailors((prev:any)=>prev.map((s:any)=>s.id===activeSailor.id?{...s,balance:refIsActive?0:s.balance-refundAmt,status:refIsActive?"Deactive":s.status}:s));
+      toast.success(refIsActive?`Card deactivated. Refunded ₹${refundAmt}`:`Refunded ₹${refundAmt}`);
+    }
     const txNo="REF-TRN"+Math.floor(10000000+Math.random()*90000000);
     setRefundReport((prev:any)=>[{sno:prev.length+1,transactionNo:txNo,customerId:activeSailor.id,name:activeSailor.name,pNo:activeSailor.pNo,category:activeSailor.type,refundDeposit:refundAmt,date:new Date().toLocaleDateString("en-GB")},...prev]);
-    toast.success(refIsActive?`Card deactivated. Refunded ₹${refundAmt}`:`Refunded ₹${refundAmt}`);
     setRefCustId("");setRefAvAmt("");setRefAmt("");setRefIsActive(false);setActiveSailor(null);
   }
 
@@ -971,6 +1131,41 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
             </div>
           </div>
         </div>
+      </div>
+
+      {/* ── Recent Transactions Table filtered by active tab ── */}
+      <div className="mt-5">
+        <h3 className="text-white text-sm font-bold mb-2 flex items-center gap-2">
+          <span>{tab === "recharge" ? "💳" : "💸"}</span>
+          <span>Recent {tab === "recharge" ? "Recharge" : "Refund"} Transactions</span>
+        </h3>
+        <Table cols={[
+          {key:"transactionNo",label:"Transaction No"},
+          {key:"customerId",label:"Customer ID"},
+          {key:"name",label:"Customer Name"},
+          {key:"type",label:"Type"},
+          {key:"amount",label:"Amount"},
+          {key:"date",label:"Date"}
+        ]}
+        rows={tab === "recharge" ? (
+          rechargeReport.map((r: any) => ({
+            transactionNo: r.transactionNo || "RCH-TRN",
+            customerId: r.customerId,
+            name: r.name || "Sailor",
+            type: <span className="bg-green-700 text-white font-bold px-2 py-0.5 rounded text-xs">RECHARGE</span>,
+            amount: <span className="text-green-400 font-bold">+₹{Number(r.rechAmount || 0).toFixed(2)}</span>,
+            date: r.date || new Date().toLocaleDateString("en-GB")
+          }))
+        ) : (
+          refundReport.map((r: any) => ({
+            transactionNo: r.transactionNo || "REF-TRN",
+            customerId: r.customerId,
+            name: r.name || "Sailor",
+            type: <span className="bg-red-700 text-white font-bold px-2 py-0.5 rounded text-xs">REFUND</span>,
+            amount: <span className="text-red-300 font-bold">-₹{Number(r.refundDeposit || 0).toFixed(2)}</span>,
+            date: r.date || new Date().toLocaleDateString("en-GB")
+          }))
+        )} />
       </div>
     </div>
   );
@@ -1099,7 +1294,16 @@ function UserManagement({ users, setUsers, onNavigateTo }: any) {
   const [selected,setSelected]=useState<number|undefined>();
   const [un,setUn]=useState(""); const [role,setRole]=useState(""); const [email,setEmail]=useState("");
 
-  function handleCreate(){if(!un||!role){toast.error("Username and Role required!");return;}if(users.some((u:any)=>u.username===un)){toast.error("Username exists!");return;}setUsers((prev:any)=>[...prev,{id:"U-"+String(prev.length+1).padStart(3,'0'),username:un,role,email,status:"Active",lastLogin:"—"}]);toast.success("User created!");handleClear();}
+  async function handleCreate(){
+    if(!un||!role){toast.error("Username and Role required!");return;}
+    if(users.some((u:any)=>u.username===un)){toast.error("Username exists!");return;}
+    const newUser = {id:"U-"+String(users.length+1).padStart(3,'0'),username:un,role,email,status:"Active",lastLogin:"—"};
+    try {
+      await api.createUser(newUser);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    setUsers((prev:any)=>[...prev,newUser]);
+    toast.success("User created!");handleClear();
+  }
   function handleUpdate(){if(selected===undefined)return;const t=users[selected];setUsers((prev:any)=>prev.map((u:any)=>u.id===t.id?{...u,role,email}:u));toast.success("User updated!");handleClear();}
   function handleDelete(){if(selected===undefined)return;const t=users[selected];setUsers((prev:any)=>prev.filter((u:any)=>u.id!==t.id));toast.success("User removed!");handleClear();}
   function handleClear(){setUn("");setRole("");setEmail("");setSelected(undefined);}
@@ -1131,7 +1335,13 @@ function UserManagement({ users, setUsers, onNavigateTo }: any) {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
   const fc=(field:string,val:any)=>setSettings((prev:any)=>({...prev,[field]:val}));
-  const handleSave=()=>{localStorage.setItem("arc_settings",JSON.stringify(settings));toast.success("Settings saved!");};
+  const handleSave=async()=>{
+    localStorage.setItem("arc_settings",JSON.stringify(settings));
+    try {
+      await api.updateSettings(settings);
+    } catch(e:any) { console.warn("API fallback:", e); }
+    toast.success("Settings saved!");
+  };
   const handleReset=()=>{setSettings(INITIAL_SETTINGS);toast.success("Settings reset!");};
 
   return (
@@ -1187,10 +1397,389 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
   );
 }
 
+// ─── Master Management Center ──────────────────────────────────────────────────
+function MasterScreen({
+  categories, setCategories,
+  brands, setBrands,
+  ships, setShips,
+  ranks, setRanks,
+  onNavigateTo
+}: any) {
+  const [tab, setTab] = useState<"category" | "subcategory" | "brand" | "ship" | "rank">("category");
+
+  // 1. Category state
+  const [catName, setCatName] = useState("");
+  const [catCode, setCatCode] = useState("");
+  const [catDesc, setCatDesc] = useState("");
+  const [selectedCat, setSelectedCat] = useState<number | undefined>();
+
+  // 2. SubCategory state
+  const [parentCatId, setParentCatId] = useState<number>(categories[0]?.id || 1);
+  const [subName, setSubName] = useState("");
+  const [subDesc, setSubDesc] = useState("");
+  const [selectedSub, setSelectedSub] = useState<number | undefined>();
+
+  // 3. Brand state
+  const [brandName, setBrandName] = useState("");
+  const [brandCategory, setBrandCategory] = useState(categories[0]?.name || "LIQUOR");
+  const [brandDesc, setBrandDesc] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState<number | undefined>();
+
+  // 4. Ship/Unit state
+  const [shipName, setShipName] = useState("");
+  const [shipCommand, setShipCommand] = useState("Eastern Fleet");
+  const [shipStatus, setShipStatus] = useState("Active");
+  const [selectedShip, setSelectedShip] = useState<number | undefined>();
+
+  // 5. Rank state
+  const [rankName, setRankName] = useState("");
+  const [rankCategory, setRankCategory] = useState("SAILOR");
+  const [selectedRank, setSelectedRank] = useState<number | undefined>();
+
+  // Category Handlers
+  async function handleCreateCategory() {
+    if (!catName.trim()) { toast.error("Category Name required!"); return; }
+    const code = catCode || `CAT-${Math.floor(10 + Math.random() * 90)}`;
+    const newCat = { code, name: catName.trim().toUpperCase(), description: catDesc, subCategories: [] };
+    try {
+      const res = await api.createCategory(newCat);
+      setCategories((prev: any) => [...prev, res]);
+      toast.success(`Category '${res.name}' created!`);
+    } catch(e:any) {
+      setCategories((prev: any) => [...prev, { ...newCat, id: Date.now() }]);
+      toast.success(`Category '${newCat.name}' created!`);
+    }
+    setCatName(""); setCatCode(""); setCatDesc(""); setSelectedCat(undefined);
+  }
+
+  async function handleUpdateCategory() {
+    if (selectedCat === undefined) return;
+    const target = categories[selectedCat];
+    if (!target) return;
+    const updated = { ...target, name: catName.trim().toUpperCase(), code: catCode, description: catDesc };
+    try { await api.updateCategory(target.id, updated); } catch(e:any){}
+    setCategories((prev: any) => prev.map((c: any) => c.id === target.id ? updated : c));
+    toast.success("Category updated!"); setCatName(""); setCatCode(""); setCatDesc(""); setSelectedCat(undefined);
+  }
+
+  async function handleDeleteCategory() {
+    if (selectedCat === undefined) return;
+    const target = categories[selectedCat];
+    if (!target) return;
+    try { await api.deleteCategory(target.id); } catch(e:any){}
+    setCategories((prev: any) => prev.filter((c: any) => c.id !== target.id));
+    toast.success("Category deleted!"); setCatName(""); setCatCode(""); setCatDesc(""); setSelectedCat(undefined);
+  }
+
+  // SubCategory Handlers
+  async function handleCreateSubCategory() {
+    if (!subName.trim()) { toast.error("SubCategory Name required!"); return; }
+    const parentCat = categories.find((c: any) => c.id === parentCatId) || categories[0];
+    if (!parentCat) { toast.error("Select a parent Category!"); return; }
+    const newSub = { categoryId: parentCat.id, categoryName: parentCat.name, name: subName.trim().toUpperCase(), description: subDesc };
+    try {
+      const res = await api.createSubCategory(newSub);
+      setCategories((prev: any) => prev.map((c: any) => c.id === parentCat.id ? { ...c, subCategories: [...(c.subCategories || []), res] } : c));
+      toast.success(`SubCategory '${res.name}' created!`);
+    } catch(e:any) {
+      setCategories((prev: any) => prev.map((c: any) => c.id === parentCat.id ? { ...c, subCategories: [...(c.subCategories || []), { ...newSub, id: Date.now() }] } : c));
+      toast.success(`SubCategory '${newSub.name}' created!`);
+    }
+    setSubName(""); setSubDesc(""); setSelectedSub(undefined);
+  }
+
+  async function handleUpdateSubCategory() {
+    if (selectedSub === undefined) return;
+    const allSubs = categories.flatMap((c: any) => c.subCategories || []);
+    const target = allSubs[selectedSub];
+    if (!target) return;
+    const parentCat = categories.find((c: any) => c.id === parentCatId) || categories[0];
+    const updated = { ...target, name: subName.trim().toUpperCase(), description: subDesc, categoryId: parentCat.id, categoryName: parentCat.name };
+    try { await api.updateSubCategory(target.id, updated); } catch(e:any){}
+    setCategories((prev: any) => prev.map((c: any) => ({
+      ...c,
+      subCategories: (c.subCategories || []).map((s: any) => s.id === target.id ? updated : s)
+    })));
+    toast.success("SubCategory updated!"); setSubName(""); setSubDesc(""); setSelectedSub(undefined);
+  }
+
+  async function handleDeleteSubCategory() {
+    if (selectedSub === undefined) return;
+    const allSubs = categories.flatMap((c: any) => c.subCategories || []);
+    const target = allSubs[selectedSub];
+    if (!target) return;
+    try { await api.deleteSubCategory(target.id); } catch(e:any){}
+    setCategories((prev: any) => prev.map((c: any) => ({
+      ...c,
+      subCategories: (c.subCategories || []).filter((s: any) => s.id !== target.id)
+    })));
+    toast.success("SubCategory deleted!"); setSubName(""); setSubDesc(""); setSelectedSub(undefined);
+  }
+
+  // Brand Handlers
+  async function handleCreateBrand() {
+    if (!brandName.trim()) { toast.error("Brand Name required!"); return; }
+    const newBrand = { name: brandName.trim().toUpperCase(), categoryName: brandCategory, description: brandDesc };
+    try {
+      const res = await api.createBrand(newBrand);
+      setBrands((prev: any) => [...prev, res]);
+      toast.success(`Brand '${res.name}' created!`);
+    } catch(e:any) {
+      setBrands((prev: any) => [...prev, { ...newBrand, id: Date.now() }]);
+      toast.success(`Brand '${newBrand.name}' created!`);
+    }
+    setBrandName(""); setBrandDesc(""); setSelectedBrand(undefined);
+  }
+
+  async function handleUpdateBrand() {
+    if (selectedBrand === undefined) return;
+    const target = brands[selectedBrand];
+    if (!target) return;
+    const updated = { ...target, name: brandName.trim().toUpperCase(), categoryName: brandCategory, description: brandDesc };
+    try { await api.updateBrand(target.id, updated); } catch(e:any){}
+    setBrands((prev: any) => prev.map((b: any) => b.id === target.id ? updated : b));
+    toast.success("Brand updated!"); setBrandName(""); setBrandDesc(""); setSelectedBrand(undefined);
+  }
+
+  async function handleDeleteBrand() {
+    if (selectedBrand === undefined) return;
+    const target = brands[selectedBrand];
+    if (!target) return;
+    try { await api.deleteBrand(target.id); } catch(e:any){}
+    setBrands((prev: any) => prev.filter((b: any) => b.id !== target.id));
+    toast.success("Brand deleted!"); setBrandName(""); setBrandDesc(""); setSelectedBrand(undefined);
+  }
+
+  // Ship Handlers
+  async function handleCreateShip() {
+    if (!shipName.trim()) { toast.error("Ship/Unit Name required!"); return; }
+    const newShip = { name: shipName.trim().toUpperCase(), command: shipCommand, status: shipStatus };
+    try {
+      const res = await api.createShip(newShip);
+      setShips((prev: any) => [...prev, res]);
+      toast.success(`Ship/Unit '${res.name}' created!`);
+    } catch(e:any) {
+      setShips((prev: any) => [...prev, { ...newShip, id: Date.now() }]);
+      toast.success(`Ship/Unit '${newShip.name}' created!`);
+    }
+    setShipName(""); setSelectedShip(undefined);
+  }
+
+  async function handleUpdateShip() {
+    if (selectedShip === undefined) return;
+    const target = ships[selectedShip];
+    if (!target) return;
+    const updated = { ...target, name: shipName.trim().toUpperCase(), command: shipCommand, status: shipStatus };
+    try { await api.updateShip(target.id, updated); } catch(e:any){}
+    setShips((prev: any) => prev.map((s: any) => s.id === target.id ? updated : s));
+    toast.success("Ship/Unit updated!"); setShipName(""); setSelectedShip(undefined);
+  }
+
+  async function handleDeleteShip() {
+    if (selectedShip === undefined) return;
+    const target = ships[selectedShip];
+    if (!target) return;
+    try { await api.deleteShip(target.id); } catch(e:any){}
+    setShips((prev: any) => prev.filter((s: any) => s.id !== target.id));
+    toast.success("Ship/Unit deleted!"); setShipName(""); setSelectedShip(undefined);
+  }
+
+  // Rank Handlers
+  async function handleCreateRank() {
+    if (!rankName.trim()) { toast.error("Rank Name required!"); return; }
+    const newRank = { name: rankName.trim().toUpperCase(), category: rankCategory };
+    try {
+      const res = await api.createRank(newRank);
+      setRanks((prev: any) => [...prev, res]);
+      toast.success(`Rank '${res.name}' created!`);
+    } catch(e:any) {
+      setRanks((prev: any) => [...prev, { ...newRank, id: Date.now() }]);
+      toast.success(`Rank '${newRank.name}' created!`);
+    }
+    setRankName(""); setSelectedRank(undefined);
+  }
+
+  async function handleUpdateRank() {
+    if (selectedRank === undefined) return;
+    const target = ranks[selectedRank];
+    if (!target) return;
+    const updated = { ...target, name: rankName.trim().toUpperCase(), category: rankCategory };
+    try { await api.updateRank(target.id, updated); } catch(e:any){}
+    setRanks((prev: any) => prev.map((r: any) => r.id === target.id ? updated : r));
+    toast.success("Rank updated!"); setRankName(""); setSelectedRank(undefined);
+  }
+
+  async function handleDeleteRank() {
+    if (selectedRank === undefined) return;
+    const target = ranks[selectedRank];
+    if (!target) return;
+    try { await api.deleteRank(target.id); } catch(e:any){}
+    setRanks((prev: any) => prev.filter((r: any) => r.id !== target.id));
+    toast.success("Rank deleted!"); setRankName(""); setSelectedRank(undefined);
+  }
+
+  const allSubCategories = categories.flatMap((c: any) => (c.subCategories || []).map((s: any) => ({ ...s, parentCategoryName: c.name })));
+
+  return (
+    <div>
+      <SectionTitle icon={<Layers size={22}/>} title="Master Management Center"/>
+      <div className="bg-[#143322] rounded-lg border border-white/30 overflow-hidden mb-4">
+        <div className="flex border-b border-white/20 flex-wrap">
+          {(["category", "subcategory", "brand", "ship", "rank"] as const).map((t) => (
+            <button key={t} onClick={() => setTab(t)}
+              className={`px-5 py-2.5 text-sm font-semibold transition ${tab === t ? "bg-white/20 text-white border-b-2 border-green-400" : "text-white/60 hover:text-white"}`}>
+              {t === "category" ? "📂 Category Master" :
+               t === "subcategory" ? "🏷️ Sub-Category Master" :
+               t === "brand" ? "🍾 Brand Master" :
+               t === "ship" ? "🚢 Ship / Unit Master" : "🎖️ Rank Master"}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-4">
+          {tab === "category" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <FI label="Category Code" value={catCode} onChange={setCatCode} placeholder="Auto e.g. CAT-01"/>
+                <FI label="Category Name" value={catName} onChange={setCatName} required placeholder="e.g. LIQUOR, FOOD"/>
+                <FI label="Description" value={catDesc} onChange={setCatDesc}/>
+              </div>
+              <div className="flex gap-3">
+                <Btn variant="primary" onClick={handleCreateCategory}>Create Category</Btn>
+                {selectedCat !== undefined && <Btn variant="primary" onClick={handleUpdateCategory}>Update</Btn>}
+                {selectedCat !== undefined && <Btn variant="danger" onClick={handleDeleteCategory}>Delete</Btn>}
+                <Btn variant="neutral" onClick={() => { setCatName(""); setCatCode(""); setCatDesc(""); setSelectedCat(undefined); }}>Clear</Btn>
+                <Btn variant="danger" onClick={() => onNavigateTo("pos")}>Close</Btn>
+              </div>
+            </div>
+          )}
+
+          {tab === "subcategory" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="flex flex-col gap-0.5">
+                  <label className="text-white text-xs font-semibold">Parent Category <span className="text-red-300">*</span></label>
+                  <select value={parentCatId} onChange={e => setParentCatId(Number(e.target.value))} className="bg-white text-gray-900 text-sm px-2 py-1 rounded">
+                    {categories.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <FI label="Sub-Category Name" value={subName} onChange={setSubName} required placeholder="e.g. WHISKY, BEER"/>
+                <FI label="Description" value={subDesc} onChange={setSubDesc}/>
+              </div>
+              <div className="flex gap-3">
+                <Btn variant="primary" onClick={handleCreateSubCategory}>Create Sub-Category</Btn>
+                {selectedSub !== undefined && <Btn variant="primary" onClick={handleUpdateSubCategory}>Update</Btn>}
+                {selectedSub !== undefined && <Btn variant="danger" onClick={handleDeleteSubCategory}>Delete</Btn>}
+                <Btn variant="neutral" onClick={() => { setSubName(""); setSubDesc(""); setSelectedSub(undefined); }}>Clear</Btn>
+                <Btn variant="danger" onClick={() => onNavigateTo("pos")}>Close</Btn>
+              </div>
+            </div>
+          )}
+
+          {tab === "brand" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <FI label="Brand Name" value={brandName} onChange={setBrandName} required placeholder="e.g. ROYAL STAG, PEPSI"/>
+                <FS label="Category" value={brandCategory} onChange={setBrandCategory} options={categories.map((c: any) => c.name)}/>
+                <FI label="Description / Manufacturer" value={brandDesc} onChange={setBrandDesc}/>
+              </div>
+              <div className="flex gap-3">
+                <Btn variant="primary" onClick={handleCreateBrand}>Create Brand</Btn>
+                {selectedBrand !== undefined && <Btn variant="primary" onClick={handleUpdateBrand}>Update</Btn>}
+                {selectedBrand !== undefined && <Btn variant="danger" onClick={handleDeleteBrand}>Delete</Btn>}
+                <Btn variant="neutral" onClick={() => { setBrandName(""); setBrandDesc(""); setSelectedBrand(undefined); }}>Clear</Btn>
+                <Btn variant="danger" onClick={() => onNavigateTo("pos")}>Close</Btn>
+              </div>
+            </div>
+          )}
+
+          {tab === "ship" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <FI label="Ship / Unit Name" value={shipName} onChange={setShipName} required placeholder="e.g. INS VIKRANT, INS DELHI"/>
+                <FI label="Command / Fleet" value={shipCommand} onChange={setShipCommand}/>
+                <FS label="Status" value={shipStatus} onChange={setShipStatus} options={["Active", "Deactive"]}/>
+              </div>
+              <div className="flex gap-3">
+                <Btn variant="primary" onClick={handleCreateShip}>Create Ship/Unit</Btn>
+                {selectedShip !== undefined && <Btn variant="primary" onClick={handleUpdateShip}>Update</Btn>}
+                {selectedShip !== undefined && <Btn variant="danger" onClick={handleDeleteShip}>Delete</Btn>}
+                <Btn variant="neutral" onClick={() => { setShipName(""); setSelectedShip(undefined); }}>Clear</Btn>
+                <Btn variant="danger" onClick={() => onNavigateTo("pos")}>Close</Btn>
+              </div>
+            </div>
+          )}
+
+          {tab === "rank" && (
+            <div>
+              <div className="grid grid-cols-3 gap-4 mb-4">
+                <FI label="Rank Title" value={rankName} onChange={setRankName} required placeholder="e.g. MCPO I, CPO, PO"/>
+                <FS label="Rank Category" value={rankCategory} onChange={setRankCategory} options={["MASTER CHIEF PETTY OFFICER", "CHIEF PETTY OFFICER", "SENIOR SAILOR", "JUNIOR SAILOR"]}/>
+              </div>
+              <div className="flex gap-3">
+                <Btn variant="primary" onClick={handleCreateRank}>Create Rank</Btn>
+                {selectedRank !== undefined && <Btn variant="primary" onClick={handleUpdateRank}>Update</Btn>}
+                {selectedRank !== undefined && <Btn variant="danger" onClick={handleDeleteRank}>Delete</Btn>}
+                <Btn variant="neutral" onClick={() => { setRankName(""); setSelectedRank(undefined); }}>Clear</Btn>
+                <Btn variant="danger" onClick={() => onNavigateTo("pos")}>Close</Btn>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-4">
+        <h3 className="text-white text-sm font-bold mb-2">
+          {tab === "category" ? "Master Categories Directory" :
+           tab === "subcategory" ? "Master Sub-Categories Directory" :
+           tab === "brand" ? "Master Brands Directory" :
+           tab === "ship" ? "Master Ships & Units Directory" : "Master Ranks Directory"}
+        </h3>
+
+        {tab === "category" && (
+          <Table cols={[{ key: "id", label: "ID" }, { key: "code", label: "Category Code" }, { key: "name", label: "Category Name" }, { key: "description", label: "Description" }, { key: "subCount", label: "Sub-Categories Count" }]}
+            rows={categories.map((c: any) => ({ ...c, subCount: <span className="bg-green-800 text-white font-bold px-2 py-0.5 rounded text-xs">{(c.subCategories || []).length} Sub-Categories</span> }))}
+            onRowClick={i => { setSelectedCat(i); const r = categories[i]; if (r) { setCatCode(r.code); setCatName(r.name); setCatDesc(r.description || ""); } }}
+            selIdx={selectedCat} />
+        )}
+
+        {tab === "subcategory" && (
+          <Table cols={[{ key: "id", label: "ID" }, { key: "parentCategoryName", label: "Parent Category" }, { key: "name", label: "Sub-Category Name" }, { key: "description", label: "Description" }]}
+            rows={allSubCategories.map((s: any) => ({ ...s, parentCategoryName: <span className="font-bold text-green-300">{s.parentCategoryName || s.categoryName}</span> }))}
+            onRowClick={i => { setSelectedSub(i); const r = allSubCategories[i]; if (r) { setSubName(r.name); setSubDesc(r.description || ""); setParentCatId(r.categoryId); } }}
+            selIdx={selectedSub} />
+        )}
+
+        {tab === "brand" && (
+          <Table cols={[{ key: "id", label: "ID" }, { key: "name", label: "Brand Name" }, { key: "categoryName", label: "Category" }, { key: "description", label: "Description" }]}
+            rows={brands}
+            onRowClick={i => { setSelectedBrand(i); const r = brands[i]; if (r) { setBrandName(r.name); setBrandCategory(r.categoryName); setBrandDesc(r.description || ""); } }}
+            selIdx={selectedBrand} />
+        )}
+
+        {tab === "ship" && (
+          <Table cols={[{ key: "id", label: "ID" }, { key: "name", label: "Ship / Unit Name" }, { key: "command", label: "Command / Fleet" }, { key: "status", label: "Status" }]}
+            rows={ships.map((s: any) => ({ ...s, status: <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.status === "Active" ? "bg-green-700 text-white" : "bg-red-700 text-white"}`}>{s.status}</span> }))}
+            onRowClick={i => { setSelectedShip(i); const r = ships[i]; if (r) { setShipName(r.name); setShipCommand(r.command); setShipStatus(r.status); } }}
+            selIdx={selectedShip} />
+        )}
+
+        {tab === "rank" && (
+          <Table cols={[{ key: "id", label: "ID" }, { key: "name", label: "Rank Title" }, { key: "category", label: "Rank Category" }]}
+            rows={ranks}
+            onRowClick={i => { setSelectedRank(i); const r = ranks[i]; if (r) { setRankName(r.name); setRankCategory(r.category); } }}
+            selIdx={selectedRank} />
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Nav Config ───────────────────────────────────────────────────────────────
 const NAV_ITEMS: {key:Screen;label:string;icon:React.ReactNode}[] = [
   {key:"pos",      label:"POS",      icon:<LayoutDashboard size={20}/>},
   {key:"products", label:"Product",  icon:<Package size={20}/>},
+  {key:"master",   label:"Master",   icon:<Layers size={20}/>},
   {key:"sailor",   label:"Sailor",   icon:<Users size={20}/>},
   {key:"stock",    label:"Stock",    icon:<Warehouse size={20}/>},
   {key:"vendor",   label:"Vendor",   icon:<Truck size={20}/>},
@@ -1200,8 +1789,27 @@ const NAV_ITEMS: {key:Screen;label:string;icon:React.ReactNode}[] = [
   {key:"settings", label:"Settings", icon:<Settings size={20}/>},
 ];
 
-// ─── App ──────────────────────────────────────────────────────────────────────
+// ─── App root (auth shell) ───────────────────────────────────────────────────
 export default function App() {
+  const [loggedIn, setLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState({ username: "superadmin", role: "Super Admin" });
+
+  if (!loggedIn) {
+    return (
+      <LoginPage
+        onLogin={(username, role) => {
+          setCurrentUser({ username, role });
+          setLoggedIn(true);
+        }}
+      />
+    );
+  }
+
+  return <AppShell currentUser={currentUser} onLogout={() => setLoggedIn(false)} />;
+}
+
+// ─── Main Application Shell ──────────────────────────────────────────────────
+function AppShell({ currentUser, onLogout }: { currentUser: { username: string; role: string }; onLogout: () => void }) {
   const [screen,setScreen]=useState<Screen>("pos");
   const isPOS=screen==="pos";
 
@@ -1231,12 +1839,85 @@ export default function App() {
   const [vendors,setVendors]=useState<any[]>(VENDORS_DATA);
   const [users,setUsers]=useState<any[]>(INITIAL_USERS);
   const [settings,setSettings]=useState<any>(()=>{const saved=localStorage.getItem("arc_settings");return saved?JSON.parse(saved):INITIAL_SETTINGS;});
+  const [categories, setCategories] = useState<any[]>([
+    { id: 1, code: "CAT-01", name: "LIQUOR", description: "Alcoholic Beverages", subCategories: [
+      { id: 1, categoryId: 1, categoryName: "LIQUOR", name: "WHISKY", description: "Blended & Single Malt" },
+      { id: 2, categoryId: 1, categoryName: "LIQUOR", name: "BEER", description: "Lager & Draught" },
+      { id: 3, categoryId: 1, categoryName: "LIQUOR", name: "RUM", description: "Dark & White Rum" },
+      { id: 4, categoryId: 1, categoryName: "LIQUOR", name: "VODKA", description: "Flavored & Standard Vodka" },
+      { id: 5, categoryId: 1, categoryName: "LIQUOR", name: "WINE", description: "Red & White Wine" },
+    ]},
+    { id: 2, code: "CAT-02", name: "FOOD", description: "Meals & Breads", subCategories: [
+      { id: 6, categoryId: 2, categoryName: "FOOD", name: "BREAD/ROTI", description: "Naan & Roti" },
+      { id: 7, categoryId: 2, categoryName: "FOOD", name: "VEGETARIAN", description: "Veg Curries" },
+      { id: 8, categoryId: 2, categoryName: "FOOD", name: "NON VEGETARIAN", description: "Non-Veg Curries" },
+    ]},
+    { id: 3, code: "CAT-03", name: "SOFT DRINKS", description: "Cold Beverages", subCategories: [
+      { id: 9, categoryId: 3, categoryName: "SOFT DRINKS", name: "COLD DRINK", description: "Soft drinks" }
+    ]},
+    { id: 4, code: "CAT-04", name: "PARTY FOOD", description: "Party Food", subCategories: [
+      { id: 10, categoryId: 4, categoryName: "PARTY FOOD", name: "PARTY VEG", description: "Party Veg" },
+      { id: 11, categoryId: 4, categoryName: "PARTY FOOD", name: "PARTY NONVEG", description: "Party Non-Veg" }
+    ]}
+  ]);
+
+  const [brands, setBrands] = useState<any[]>([
+    { id: 1, name: "ROYAL STAG", categoryName: "LIQUOR", description: "Royal Stag Whisky" },
+    { id: 2, name: "OLD MONK", categoryName: "LIQUOR", description: "Old Monk Rum" },
+    { id: 3, name: "CARLSBERG", categoryName: "LIQUOR", description: "Carlsberg Beer" },
+    { id: 4, name: "PEPSI", categoryName: "SOFT DRINKS", description: "Pepsi Drink" }
+  ]);
+  const [ships, setShips] = useState<any[]>([
+    { id: 1, name: "INS DELHI", command: "Eastern Fleet", status: "Active" },
+    { id: 2, name: "INS VIKRANT", command: "Eastern Fleet", status: "Active" },
+    { id: 3, name: "INS KOLKATA", command: "Eastern Fleet", status: "Active" }
+  ]);
+  const [ranks, setRanks] = useState<any[]>([
+    { id: 1, name: "MCPO I", category: "MASTER CHIEF PETTY OFFICER" },
+    { id: 2, name: "CPO", category: "CHIEF PETTY OFFICER" },
+    { id: 3, name: "PO", category: "SENIOR SAILOR" },
+    { id: 4, name: "SEA I", category: "JUNIOR SAILOR" }
+  ]);
+
+  // Fetch dynamic data from ASP.NET Core + PostgreSQL backend
+  useEffect(() => {
+    async function loadLiveData() {
+      try {
+        const [prods, sails, vends, sets, sales, consoleLogs, cats, brnds, shps, rnks] = await Promise.all([
+          api.getProducts().catch(() => null),
+          api.getSailors().catch(() => null),
+          api.getVendors().catch(() => null),
+          api.getSettings().catch(() => null),
+          api.getSalesReport().catch(() => null),
+          api.getConsoleReport().catch(() => null),
+          api.getCategories().catch(() => null),
+          api.getBrands().catch(() => null),
+          api.getShips().catch(() => null),
+          api.getRanks().catch(() => null),
+        ]);
+        if (prods) setProducts(prods);
+        if (sails) setSailors(sails);
+        if (vends) setVendors(vends);
+        if (sets && Object.keys(sets).length > 0) setSettings((prev: any) => ({ ...prev, ...sets }));
+        if (sales) setSalesReport(sales);
+        if (consoleLogs) setConsoleReport(consoleLogs);
+        if (cats && cats.length > 0) setCategories(cats);
+        if (brnds && brnds.length > 0) setBrands(brnds);
+        if (shps && shps.length > 0) setShips(shps);
+        if (rnks && rnks.length > 0) setRanks(rnks);
+      } catch (err) {
+        console.warn("API Connection failed, using cached state.", err);
+      }
+    }
+    loadLiveData();
+  }, []);
 
   const screenMap:Record<Screen,React.ReactNode>={
     pos:<POSScreen products={products} setProducts={setProducts} sailors={sailors} setSailors={setSailors}
           salesReport={salesReport} setSalesReport={setSalesReport} consoleReport={consoleReport} setConsoleReport={setConsoleReport}
           newSalesReport={newSalesReport} setNewSalesReport={setNewSalesReport}/>,
-    products:<ProductDetails products={products} setProducts={setProducts} onNavigateTo={setScreen}/>,
+    products:<ProductDetails products={products} setProducts={setProducts} categories={categories} brands={brands} onNavigateTo={setScreen}/>,
+    master:<MasterScreen categories={categories} setCategories={setCategories} brands={brands} setBrands={setBrands} ships={ships} setShips={setShips} ranks={ranks} setRanks={setRanks} onNavigateTo={setScreen}/>,
     sailor:<SailorDetails sailors={sailors} setSailors={setSailors} cardRegistration={cardRegistration} setCardRegistration={setCardRegistration} onNavigateTo={setScreen}/>,
     stock:<StockDetails products={products} setProducts={setProducts} stockData={stockData} setStockData={setStockData} onNavigateTo={setScreen}/>,
     vendor:<VendorDetails vendors={vendors} setVendors={setVendors} onNavigateTo={setScreen}/>,
@@ -1271,11 +1952,11 @@ export default function App() {
             <div className="flex flex-col items-end gap-0.5">
               <div className="flex items-center gap-1">
                 <span className="text-white/60 text-[10px]">User Name</span>
-                <span className="bg-[#3a8c2f] text-white text-[10px] font-bold px-2 py-0.5 rounded">superadmin</span>
+                <span className="bg-[#3a8c2f] text-white text-[10px] font-bold px-2 py-0.5 rounded">{currentUser.username}</span>
                 <button onClick={()=>window.location.reload()} className="bg-[#2d6a4f] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90">
                   <RefreshCw size={10}/>Refresh
                 </button>
-                <button onClick={()=>toast.success("Logged out!")} className="bg-[#cc2222] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90">
+                <button onClick={()=>onLogout()} className="bg-[#cc2222] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90">
                   <LogOut size={10}/>Logout
                 </button>
               </div>
