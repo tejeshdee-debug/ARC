@@ -744,6 +744,21 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
   const [showWebcamModal, setShowWebcamModal] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  function handleFileBrowse(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (evt) => {
+        if (evt.target?.result) {
+          setPhotoUrl(evt.target.result as string);
+          toast.success(`Photo uploaded: ${file.name}`);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  }
 
   async function openWebcam(){
     setShowWebcamModal(true);
@@ -810,14 +825,18 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
           </div>
           <div className="w-48 flex flex-col items-center gap-3 flex-shrink-0">
             <p className="text-white text-sm font-bold">Customer Photo</p>
-            <div className="w-36 h-32 bg-white/20 rounded border-2 border-white/40 flex items-center justify-center overflow-hidden">
+            <div className="w-36 h-32 bg-white/20 rounded border-2 border-white/40 flex items-center justify-center overflow-hidden shadow-inner">
               {isCapturing
                 ?<div className="text-white text-xs text-center animate-pulse flex flex-col items-center gap-1"><RefreshCw size={24} className="animate-spin"/>Capturing...</div>
                 :photoUrl?<img src={photoUrl} className="w-full h-full object-cover" alt="Sailor"/>
                 :<div className="flex flex-col items-center gap-1 text-white/40"><Users size={40}/><span className="text-xs">No Photo</span></div>
               }
             </div>
-            <button onClick={openWebcam} className="bg-[#3a8c2f] text-white text-xs px-4 py-1.5 rounded w-full cursor-pointer hover:bg-green-600 font-bold transition flex items-center justify-center gap-1.5">📷 Capture Photo</button>
+            <div className="flex flex-col gap-2 w-full">
+              <button onClick={openWebcam} type="button" className="bg-[#3a8c2f] text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-green-600 font-bold transition flex items-center justify-center gap-1.5 shadow">📷 Capture Photo</button>
+              <button onClick={() => fileInputRef.current?.click()} type="button" className="bg-[#1b5e20] border border-green-400/50 text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-green-700 font-bold transition flex items-center justify-center gap-1.5 shadow">📁 Browse File</button>
+              <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileBrowse} className="hidden"/>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-4 mt-4">
