@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { LogIn, Eye, EyeOff, Shield, Anchor } from "lucide-react";
 import { api } from "../api/client";
+import fmuLogo from "../fmu_logo.png";
+import easternSwordLogo from "../eastern_sword_logo.png";
 
 // Demo credentials — in production these would come from an API
 const DEMO_USERS: Record<string, { role: string; id: string }> = {
@@ -73,32 +75,40 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
 
       {/* ── Top bar ── */}
       <header className="login-topbar">
-        <div className="login-topbar-inner">
-          <div className="login-topbar-brand">
-            <Anchor size={16} className="login-anchor-icon" />
-            <span>INDIAN NAVY — EASTERN NAVAL COMMAND</span>
+        <div className="login-topbar-inner flex items-center justify-between px-4 w-full">
+          {/* Top Left Corner Logo */}
+          <div className="login-topbar-brand flex items-center gap-2">
+            <img src={fmuLogo} alt="FMU Visakhapatnam" className="h-9 w-auto object-contain drop-shadow-md" />
+            <span className="font-bold text-xs tracking-wider text-white/90">INDIAN NAVY — EASTERN NAVAL COMMAND</span>
           </div>
-          <div className="login-topbar-clock">
-            <span className="login-clock-date">{dateStr}</span>
-            <span className="login-clock-sep">|</span>
-            <span className="login-clock-time">{timeStr}</span>
+          {/* Top Right Corner Logo & Clock */}
+          <div className="login-topbar-clock flex items-center gap-3">
+            <div className="flex items-center gap-2 text-xs">
+              <span className="login-clock-date">{dateStr}</span>
+              <span className="login-clock-sep">|</span>
+              <span className="login-clock-time">{timeStr}</span>
+            </div>
+            <div className="pl-2 border-l border-white/20">
+              <img src={easternSwordLogo} alt="Eastern Sword" className="h-9 w-auto object-contain drop-shadow-md" />
+            </div>
           </div>
         </div>
       </header>
 
       {/* ── Center card ── */}
       <main className="login-main">
-        <div className="login-card">
+        <div className="login-card relative overflow-hidden">
           {/* Glow ring */}
           <div className="login-card-glow" />
 
-          {/* Logo / badge */}
-          <div className="login-badge">
-            <div className="login-badge-ring login-badge-ring-outer" />
-            <div className="login-badge-ring login-badge-ring-inner" />
-            <div className="login-badge-core">
-              <Shield size={28} className="login-shield-icon" />
+          {/* Corner Logos inside Card */}
+          <div className="flex items-center justify-between w-full mb-2 px-1">
+            <img src={fmuLogo} alt="Fleet Maintenance Unit" className="h-14 w-auto object-contain drop-shadow-lg hover:scale-105 transition-transform" />
+            <div className="flex flex-col items-center text-center">
+              <span className="text-[10px] font-bold text-amber-400/80 tracking-widest uppercase">FMU VISAKHAPATNAM</span>
+              <span className="text-[9px] text-white/40 tracking-wider">THE SUNRISE FLEET</span>
             </div>
+            <img src={easternSwordLogo} alt="Eastern Sword - The Sunrise Fleet" className="h-14 w-auto object-contain drop-shadow-lg hover:scale-105 transition-transform" />
           </div>
 
           {/* Heading */}

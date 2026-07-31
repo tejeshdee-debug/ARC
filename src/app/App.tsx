@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import LoginPage from "./components/LoginPage";
 import { api } from "./api/client";
+import fmuLogo from "./fmu_logo.png";
+import easternSwordLogo from "./eastern_sword_logo.png";
 import {
   Package, Users, Warehouse, Truck, BarChart2, UserCog, CreditCard,
   Settings, ChevronLeft, ChevronRight, RefreshCw, LogOut, KeyRound,
@@ -2106,7 +2108,16 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
             {settings.orgName.toUpperCase()} — {settings.orgShortName.toUpperCase()} — {settings.orgAddress.toUpperCase()}
           </p>
         </div>
-        <div className="flex items-center px-3">
+        <div className="flex items-center px-3 gap-3">
+          {/* Far Left Start Logo */}
+          <div className="flex items-center gap-2 flex-shrink-0 py-1 pl-1 pr-3 border-r border-white/10">
+            <img src={fmuLogo} alt="FMU Visakhapatnam" className="h-10 w-auto object-contain drop-shadow" />
+            <div className="hidden lg:flex flex-col">
+              <span className="text-white font-extrabold text-[11px] tracking-wider leading-none">EASTERN NAVAL COMMAND</span>
+              <span className="text-amber-400 text-[9px] font-bold leading-tight">FLEET MAINTENANCE UNIT / ARC</span>
+            </div>
+          </div>
+          {/* Nav Items */}
           <div className="flex items-center flex-1">
             {NAV_ITEMS.map(item => (
               <button key={item.key} onClick={() => setScreen(item.key)}
@@ -2117,7 +2128,8 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          {/* Far Right End Section with Eastern Sword Logo */}
+          <div className="flex items-center gap-3 flex-shrink-0">
             <div className="flex flex-col items-end gap-0.5">
               <div className="flex items-center gap-1">
                 <span className="text-white/60 text-[10px]">User Name</span>
@@ -2132,6 +2144,9 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
               <button onClick={() => toast.success("Change password modal.")} className="bg-[#555] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90 self-end">
                 <KeyRound size={10} />Change Password
               </button>
+            </div>
+            <div className="pl-2 border-l border-white/10 flex items-center">
+              <img src={easternSwordLogo} alt="Eastern Sword" className="h-10 w-auto object-contain drop-shadow" />
             </div>
           </div>
         </div>
