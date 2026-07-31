@@ -3,6 +3,7 @@ import LoginPage from "./components/LoginPage";
 import { api } from "./api/client";
 import fmuLogo from "./fmu_logo.png";
 import easternSwordLogo from "./eastern_sword_logo.png";
+import navalBanner from "./naval_banner.jpg";
 import {
   Package, Users, Warehouse, Truck, BarChart2, UserCog, CreditCard,
   Settings, ChevronLeft, ChevronRight, RefreshCw, LogOut, KeyRound,
@@ -25,7 +26,7 @@ function Btn({ children, onClick, variant = "primary", className = "", type = "b
   children: React.ReactNode; onClick?: () => void;
   variant?: "primary" | "danger" | "neutral" | "dark"; className?: string; type?: "button" | "submit";
 }) {
-  const colors = { primary: "bg-[#3a8c2f]", danger: "bg-[#cc2222]", neutral: "bg-[#555]", dark: "bg-[#143322]" };
+  const colors = { primary: "bg-[#0284c7]", danger: "bg-[#cc2222]", neutral: "bg-[#555]", dark: "bg-[#091b33]" };
   return (
     <button type={type} onClick={onClick}
       className={`px-4 py-1.5 rounded font-semibold text-sm text-white cursor-pointer border-0 transition-opacity hover:opacity-90 active:opacity-75 ${colors[variant]} ${className}`}>
@@ -72,7 +73,7 @@ function Table({ cols, rows, onRowClick, selIdx }: {
         <thead>
           <tr>
             {cols.map(c => (
-              <th key={c.key} className="bg-[#2d6a4f] text-white font-bold px-3 py-1.5 text-left whitespace-nowrap border border-white/20 sticky top-0">
+              <th key={c.key} className="bg-[#0369a1] text-white font-bold px-3 py-1.5 text-left whitespace-nowrap border border-white/20 sticky top-0">
                 {c.label}
               </th>
             ))}
@@ -81,8 +82,8 @@ function Table({ cols, rows, onRowClick, selIdx }: {
         <tbody>
           {rows.map((row, i) => (
             <tr key={i} onClick={() => onRowClick?.(i)}
-              className="cursor-pointer border-b border-gray-200 transition-colors hover:bg-green-50"
-              style={{ backgroundColor: selIdx === i ? "#d1fae5" : i % 2 === 0 ? "#ffffff" : "#f0fdf4" }}>
+              className="cursor-pointer border-b border-gray-200 transition-colors hover:bg-sky-50"
+              style={{ backgroundColor: selIdx === i ? "#bae6fd" : i % 2 === 0 ? "#ffffff" : "#f0f9ff" }}>
               {cols.map(c => (
                 <td key={c.key} className="px-3 py-1 text-gray-800 whitespace-nowrap border-r border-gray-200">
                   {row[c.key]}
@@ -426,7 +427,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
 
       {/* ── Categories bar ── */}
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-[#071a0d] border-b border-white/20 flex-shrink-0">
+      <div className="flex items-center gap-1 px-2 py-1.5 bg-[#061830] border-b border-white/20 flex-shrink-0">
         <span className="text-white text-xs font-bold mr-2 whitespace-nowrap">Categories</span>
         <button className="text-white/60 hover:text-white flex-shrink-0"><ChevronLeft size={16} /></button>
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1">
@@ -442,15 +443,15 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       </div>
 
       {/* ── Sub - Categories bar ── */}
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-[#0a2614] border-b border-white/20 flex-shrink-0">
-        <span className="text-emerald-300 text-xs font-bold mr-2 whitespace-nowrap flex items-center gap-1">
+      <div className="flex items-center gap-1 px-2 py-1.5 bg-[#092244] border-b border-white/20 flex-shrink-0">
+        <span className="text-cyan-300 text-xs font-bold mr-2 whitespace-nowrap flex items-center gap-1">
           <Layers size={14} /> Sub - Categories
         </span>
         <button className="text-white/60 hover:text-white flex-shrink-0"><ChevronLeft size={16} /></button>
         <div className="flex items-center gap-1 overflow-x-auto no-scrollbar flex-1">
           {subCategories.map(sub => (
             <button key={sub} onClick={() => { setActiveSubCat(sub); setActiveBrand("ALL"); }}
-              style={{ backgroundColor: activeSubCat === sub ? "#16a34a" : "rgba(255,255,255,0.1)" }}
+              style={{ backgroundColor: activeSubCat === sub ? "#0284c7" : "rgba(255,255,255,0.1)" }}
               className={`px-3 py-1 rounded text-xs font-semibold transition-all hover:opacity-90 whitespace-nowrap ${activeSubCat === sub ? "text-white ring-1 ring-white/50 font-bold" : "text-white/80"
                 }`}>
               {sub}
@@ -461,7 +462,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       </div>
 
       {/* ── Brands bar (Always displayed) ── */}
-      <div className="flex items-center gap-1 px-2 py-1 bg-[#0a2f16] border-b border-white/20 flex-shrink-0">
+      <div className="flex items-center gap-1 px-2 py-1 bg-[#0b284e] border-b border-white/20 flex-shrink-0">
         <span className="text-amber-300 text-xs font-bold mr-2 whitespace-nowrap flex items-center gap-1">
           <Tags size={13} /> Brands
         </span>
@@ -516,7 +517,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
           <div className="flex-1 bg-white rounded overflow-auto min-h-0">
             <table className="w-full text-xs border-collapse">
               <thead>
-                <tr className="bg-[#2d6a4f]">
+                <tr className="bg-[#0369a1]">
                   {["Item Description", "Qty", "Price", "Qty Type", "Amount", ""].map(h => (
                     <th key={h} className="text-white font-bold px-2 py-1.5 text-left whitespace-nowrap">{h}</th>
                   ))}
@@ -559,7 +560,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
           <div className="flex items-center justify-between flex-shrink-0">
             <div>
               <span className="text-white font-bold text-sm">Grand Total: </span>
-              <span className="text-green-400 font-bold text-lg">₹{grandTotal.toFixed(2)}</span>
+              <span className="text-cyan-400 font-bold text-lg">₹{grandTotal.toFixed(2)}</span>
               <span className="text-white/50 text-xs ml-3">{orderItems.reduce((s, i) => s + i.qty, 0)} item(s)</span>
             </div>
             <div className="flex gap-2">
@@ -576,12 +577,12 @@ function POSScreen({ products, setProducts, sailors, setSailors,
         <div className="w-72 flex-shrink-0 flex flex-col gap-2 min-h-0">
 
           {/* Card Payment Panel */}
-          <div className="bg-[#0e2717] border border-green-500/40 rounded-lg p-2.5 flex flex-col gap-2 shadow-lg">
-            <div className="flex items-center justify-between border-b border-green-500/30 pb-1 flex-shrink-0">
+          <div className="bg-[#091b33] border border-cyan-500/40 rounded-lg p-2.5 flex flex-col gap-2 shadow-lg">
+            <div className="flex items-center justify-between border-b border-cyan-500/30 pb-1 flex-shrink-0">
               <h3 className="text-white font-bold text-xs flex items-center gap-1.5">
-                <CreditCard size={14} className="text-green-400" /> Card Payment
+                <CreditCard size={14} className="text-cyan-400" /> Card Payment
               </h3>
-              <span className="text-green-400/70 text-[9px] uppercase tracking-wider font-semibold">Direct POS</span>
+              <span className="text-cyan-400/70 text-[9px] uppercase tracking-wider font-semibold">Direct POS</span>
             </div>
 
             <div className="flex flex-col gap-1">
@@ -595,10 +596,10 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                 onKeyDown={e => e.key === "Enter" && confirmPayment()}
                 placeholder="e.g. 0001777486 or 44361W"
                 className={`w-full font-bold text-xs px-2 py-1.5 rounded outline-none border transition ${popupSailor
-                    ? "bg-white text-gray-900 border-green-500 ring-1 ring-green-400"
+                    ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
                     : popupCard.length > 0
                       ? "bg-red-50 text-gray-900 border-red-400"
-                      : "bg-white text-gray-900 border-gray-300 focus:border-green-500"
+                      : "bg-white text-gray-900 border-gray-300 focus:border-cyan-500"
                   }`}
               />
               {popupCard.length > 0 && !popupSailor && (
@@ -608,9 +609,9 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
             {/* Customer card info */}
             {popupSailor && (
-              <div className={`rounded p-2 flex items-center gap-2 text-xs ${popupSailor.status === "Active" ? "bg-green-950/60 border border-green-500/40" : "bg-red-950/60 border border-red-500/40"
+              <div className={`rounded p-2 flex items-center gap-2 text-xs ${popupSailor.status === "Active" ? "bg-sky-950/60 border border-cyan-500/40" : "bg-red-950/60 border border-red-500/40"
                 }`}>
-                <div className="w-7 h-7 rounded-full bg-green-700 flex items-center justify-center flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-sky-700 flex items-center justify-center flex-shrink-0">
                   <Users size={14} className="text-white" />
                 </div>
                 <div className="flex-1 min-w-0">
@@ -619,7 +620,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                 </div>
                 <div className="text-right flex-shrink-0">
                   <p className="text-[9px] text-white/50">Balance</p>
-                  <p className={`font-bold text-xs ${popupSailor.balance >= grandTotal ? "text-green-400" : "text-red-400"}`}>
+                  <p className={`font-bold text-xs ${popupSailor.balance >= grandTotal ? "text-cyan-400" : "text-red-400"}`}>
                     ₹{popupSailor.balance.toFixed(2)}
                   </p>
                 </div>
@@ -638,8 +639,8 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               onClick={confirmPayment}
               disabled={orderItems.length === 0 || !popupSailor || popupSailor.status !== "Active" || grandTotal > popupSailor.balance}
               className={`w-full py-2 rounded text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow ${orderItems.length > 0 && popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance
-                  ? "bg-green-600 hover:bg-green-500 active:scale-95 cursor-pointer"
-                  : "bg-green-900/30 text-white/40 cursor-not-allowed border border-white/10"
+                  ? "bg-sky-600 hover:bg-sky-500 active:scale-95 cursor-pointer"
+                  : "bg-sky-900/30 text-white/40 cursor-not-allowed border border-white/10"
                 }`}>
               <CreditCard size={13} />
               {orderItems.length === 0
@@ -656,12 +657,12 @@ function POSScreen({ products, setProducts, sailors, setSailors,
           </div>
 
           {/* Live Stock Panel */}
-          <div className="flex-1 flex flex-col gap-1 min-h-0 bg-[#071a0d] border border-white/10 rounded-lg p-2">
-            <div className="text-white text-[10px] font-bold text-center bg-[#2d6a4f] py-1 rounded">Live Stock</div>
+          <div className="flex-1 flex flex-col gap-1 min-h-0 bg-[#061830] border border-white/10 rounded-lg p-2">
+            <div className="text-white text-[10px] font-bold text-center bg-[#0369a1] py-1 rounded">Live Stock</div>
             <div className="bg-white rounded overflow-auto flex-1">
               <table className="w-full text-[10px] border-collapse">
                 <thead className="sticky top-0">
-                  <tr className="bg-[#2d6a4f]">
+                  <tr className="bg-[#0369a1]">
                     <th className="text-white font-bold px-2 py-1 text-left">Item</th>
                     <th className="text-white font-bold px-1 py-1 text-right">Qty</th>
                   </tr>
@@ -770,7 +771,7 @@ function ProductDetails({ products, setProducts, categories = [], brands = [], o
   return (
     <div>
       <SectionTitle icon={<Package size={22} />} title="Product Details" />
-      <div className="bg-[#143322] rounded-lg p-4 mb-4 border border-white/30">
+      <div className="bg-[#091b33] rounded-lg p-4 mb-4 border border-white/30">
         <div className="grid grid-cols-2 gap-x-8 gap-y-3">
           <FI label="Code" value={code} onChange={setCode} required />
 
@@ -921,7 +922,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
   return (
     <div>
       <SectionTitle icon={<Users size={22} />} title="Sailor Details" />
-      <div className="bg-[#143322] rounded-lg p-4 border border-white/30">
+      <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
         <div className="flex gap-6">
           <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-3">
             <FI label="Sailor ID" value={sailorId} onChange={setSailorId} />
@@ -951,15 +952,15 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
               }
             </div>
             <div className="flex flex-col gap-2 w-full">
-              <button onClick={openWebcam} type="button" className="bg-[#3a8c2f] text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-green-600 font-bold transition flex items-center justify-center gap-1.5 shadow">📷 Capture Photo</button>
-              <button onClick={() => fileInputRef.current?.click()} type="button" className="bg-[#1b5e20] border border-green-400/50 text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-green-700 font-bold transition flex items-center justify-center gap-1.5 shadow">📁 Browse File</button>
+              <button onClick={openWebcam} type="button" className="bg-[#0284c7] text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-sky-600 font-bold transition flex items-center justify-center gap-1.5 shadow">📷 Capture Photo</button>
+              <button onClick={() => fileInputRef.current?.click()} type="button" className="bg-[#0369a1] border border-cyan-400/50 text-white text-xs px-3 py-1.5 rounded w-full cursor-pointer hover:bg-sky-700 font-bold transition flex items-center justify-center gap-1.5 shadow">📁 Browse File</button>
               <input type="file" ref={fileInputRef} accept="image/*" onChange={handleFileBrowse} className="hidden" />
             </div>
           </div>
         </div>
         <div className="flex items-center gap-4 mt-4">
           <label className="flex items-center gap-1.5 text-white text-sm cursor-pointer">
-            <input type="checkbox" checked={printBill} onChange={e => setPrintBill(e.target.checked)} className="accent-green-500" />Print Bill
+            <input type="checkbox" checked={printBill} onChange={e => setPrintBill(e.target.checked)} className="accent-sky-500" />Print Bill
           </label>
           <Btn variant="primary" onClick={handleCreate}>Create</Btn>
           {selected !== undefined && <Btn variant="primary" onClick={handleUpdate}>Update</Btn>}
@@ -984,7 +985,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
           rows={sailors.map((s: any) => ({
             ...s,
             balance: `₹${Number(s.balance).toFixed(2)}`,
-            status: <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.status === 'Active' ? 'bg-green-700 text-white' : 'bg-red-700 text-white'}`}>{s.status}</span>
+            status: <span className={`px-2 py-0.5 rounded text-xs font-bold ${s.status === 'Active' ? 'bg-sky-700 text-white' : 'bg-red-700 text-white'}`}>{s.status}</span>
           }))}
           onRowClick={i => { setSelected(i); loadSailor(sailors[i]); }}
           selIdx={selected} />
@@ -993,7 +994,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
       {/* ── Live Webcam Stream Modal ── */}
       {showWebcamModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm">
-          <div className="bg-[#143322] border-2 border-green-500/60 rounded-2xl p-5 w-[480px] shadow-2xl flex flex-col items-center">
+          <div className="bg-[#091b33] border-2 border-cyan-500/60 rounded-2xl p-5 w-[480px] shadow-2xl flex flex-col items-center">
             <div className="flex justify-between items-center w-full mb-3 pb-2 border-b border-white/20">
               <h3 className="text-white font-bold text-base flex items-center gap-2">📷 Live Webcam Capture</h3>
               <button onClick={stopWebcam} className="text-white/60 hover:text-white text-xl font-bold">✕</button>
@@ -1010,7 +1011,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
       )}
       {showSearch && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="bg-[#143322] rounded-xl border-2 border-white/40 p-5 w-[600px] shadow-2xl">
+          <div className="bg-[#091b33] rounded-xl border-2 border-white/40 p-5 w-[600px] shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <span className="text-white text-sm font-semibold">Search</span>
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)} autoFocus
@@ -1068,7 +1069,7 @@ function StockDetails({ products, setProducts, stockData, setStockData, onNaviga
   return (
     <div>
       <SectionTitle icon={<Warehouse size={22} />} title="Stock Details" />
-      <div className="bg-[#143322] rounded-lg p-4 mb-4 border border-white/30">
+      <div className="bg-[#091b33] rounded-lg p-4 mb-4 border border-white/30">
         <div className="grid grid-cols-2 gap-x-8 gap-y-3">
           <FI label="Product Code" value={productCode} onChange={handleCodeChange} required />
           <FI label="Product Name" value={productName} onChange={setProductName} />
@@ -1135,7 +1136,7 @@ function VendorDetails({ vendors, setVendors, onNavigateTo }: any) {
   return (
     <div>
       <SectionTitle icon={<Truck size={22} />} title="Vendor Details" />
-      <div className="bg-[#143322] rounded-lg p-4 mb-4 border border-white/30">
+      <div className="bg-[#091b33] rounded-lg p-4 mb-4 border border-white/30">
         <div className="grid grid-cols-2 gap-x-8 gap-y-3">
           <FI label="Vendor ID" value={vId} onChange={setVId} />
           <FI label="Vendor Name" value={vName} onChange={setVName} required />
@@ -1209,7 +1210,7 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
   return (
     <div>
       <SectionTitle icon={<CreditCard size={22} />} title="Recharge / Refund" />
-      <div className="bg-[#143322] rounded-lg border border-white/30 overflow-hidden">
+      <div className="bg-[#091b33] rounded-lg border border-white/30 overflow-hidden">
         <div className="flex border-b border-white/20">
           {(["recharge", "refund"] as const).map(t => (
             <button key={t} onClick={() => { setTab(t); setActiveSailor(null); }}
@@ -1222,11 +1223,11 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
           {tab === "recharge" ? (
             <div className="flex-1 flex flex-col gap-3">
               <FI label="Customer ID" value={rCustId} onChange={handleRechargeIdChange} required />
-              {activeSailor && <div className="text-xs text-green-300 font-bold">{activeSailor.name} ({activeSailor.rank})</div>}
+              {activeSailor && <div className="text-xs text-cyan-300 font-bold">{activeSailor.name} ({activeSailor.rank})</div>}
               <FI label="Available Amount" value={rAvAmt} readOnly />
               <FI label="Current Recharge Amount" value={rRechAmt} onChange={setRRechAmt} required />
               <label className="flex items-center gap-2 text-white text-sm cursor-pointer">
-                <input type="checkbox" checked={rPrint} onChange={e => setRPrint(e.target.checked)} className="accent-green-500" />Print Bill
+                <input type="checkbox" checked={rPrint} onChange={e => setRPrint(e.target.checked)} className="accent-sky-500" />Print Bill
               </label>
               <div className="flex gap-3 mt-2">
                 <Btn variant="primary" onClick={handleRechargeSubmit}>Recharge</Btn>
@@ -1237,17 +1238,17 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
           ) : (
             <div className="flex-1 flex flex-col gap-3">
               <FI label="Customer ID" value={refCustId} onChange={handleRefundIdChange} required />
-              {activeSailor && <div className="text-xs text-green-300 font-bold">{activeSailor.name} ({activeSailor.status})</div>}
+              {activeSailor && <div className="text-xs text-cyan-300 font-bold">{activeSailor.name} ({activeSailor.status})</div>}
               <FI label="Available Amount" value={refAvAmt} readOnly />
               <FI label="Refund Amount" value={refAmt} onChange={setRefAmt} required={!refIsActive} />
               <div className="flex items-center gap-3">
                 <FI label="Refund Deposit" value={refDeposit} onChange={setRefDeposit} className="flex-1" />
                 <label className="flex items-center gap-1.5 text-white text-sm cursor-pointer mt-5">
-                  <input type="checkbox" checked={refPrint} onChange={e => setRefPrint(e.target.checked)} className="accent-green-500" />Print Bill
+                  <input type="checkbox" checked={refPrint} onChange={e => setRefPrint(e.target.checked)} className="accent-sky-500" />Print Bill
                 </label>
               </div>
               <label className="flex items-center gap-2 text-white text-xs cursor-pointer">
-                <input type="checkbox" checked={refIsActive} onChange={e => setRefIsActive(e.target.checked)} className="accent-green-500" />
+                <input type="checkbox" checked={refIsActive} onChange={e => setRefIsActive(e.target.checked)} className="accent-sky-500" />
                 Is Active <span className="text-white/50 ml-1">(Check to refund deposit and deactivate card)</span>
               </label>
               <div className="flex gap-3 mt-2">
@@ -1261,10 +1262,10 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
             <div className="grid grid-cols-3 gap-1.5">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(d => (
                 <button key={d} onClick={() => appendDigit(d)}
-                  className="bg-[#071a0d] border border-white/30 text-white font-bold text-lg py-3 rounded hover:bg-[#0f2d1a]">{d}</button>
+                  className="bg-[#061830] border border-white/30 text-white font-bold text-lg py-3 rounded hover:bg-[#092244]">{d}</button>
               ))}
-              <button onClick={backspace} className="bg-[#071a0d] border border-white/30 text-white font-bold text-sm py-3 rounded hover:bg-[#0f2d1a]">⌫</button>
-              <button onClick={() => appendDigit("0")} className="bg-[#071a0d] border border-white/30 text-white font-bold text-lg py-3 rounded hover:bg-[#0f2d1a] col-span-2">0</button>
+              <button onClick={backspace} className="bg-[#061830] border border-white/30 text-white font-bold text-sm py-3 rounded hover:bg-[#092244]">⌫</button>
+              <button onClick={() => appendDigit("0")} className="bg-[#061830] border border-white/30 text-white font-bold text-lg py-3 rounded hover:bg-[#092244] col-span-2">0</button>
             </div>
           </div>
         </div>
@@ -1289,8 +1290,8 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
               transactionNo: r.transactionNo || "RCH-TRN",
               customerId: r.customerId,
               name: r.name || "Sailor",
-              type: <span className="bg-green-700 text-white font-bold px-2 py-0.5 rounded text-xs">RECHARGE</span>,
-              amount: <span className="text-green-400 font-bold">+₹{Number(r.rechAmount || 0).toFixed(2)}</span>,
+              type: <span className="bg-sky-700 text-white font-bold px-2 py-0.5 rounded text-xs">RECHARGE</span>,
+              amount: <span className="text-cyan-400 font-bold">+₹{Number(r.rechAmount || 0).toFixed(2)}</span>,
               date: r.date || new Date().toLocaleDateString("en-GB")
             }))
           ) : (
@@ -1391,7 +1392,7 @@ function ReportsScreen({ products: _p, sailors, stockData, salesReport, consoleR
 
   const filtered = rows.filter(r => Object.values(r).some(v => String(v).toLowerCase().includes(search.toLowerCase())));
 
-  function handlePrint() { const w = window.open(); if (!w) return; w.document.write(`<html><head><title>Print Report</title><style>table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#2d6a4f;color:white;}</style></head><body><h2>${reportType}</h2><table><thead><tr>${cols.map(c => `<th>${c.label}</th>`).join('')}</tr></thead><tbody>${filtered.map(r => `<tr>${cols.map(c => `<td>${r[c.key]}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`); w.document.close(); w.print(); }
+  function handlePrint() { const w = window.open(); if (!w) return; w.document.write(`<html><head><title>Print Report</title><style>table{width:100%;border-collapse:collapse;}th,td{border:1px solid #ddd;padding:8px;text-align:left;}th{background:#0369a1;color:white;}</style></head><body><h2>${reportType}</h2><table><thead><tr>${cols.map(c => `<th>${c.label}</th>`).join('')}</tr></thead><tbody>${filtered.map(r => `<tr>${cols.map(c => `<td>${r[c.key]}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`); w.document.close(); w.print(); }
   function handleExport() { let csv = cols.map(c => c.label).join(",") + "\n"; filtered.forEach(r => { csv += cols.map(c => `"${String(r[c.key] || '')}"`).join(",") + "\n"; }); const blob = new Blob([csv], { type: 'text/csv' }); const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `${reportType.replace(" ", "_")}.csv`; link.click(); }
 
   return (
@@ -1485,7 +1486,7 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
     <div>
       <SectionTitle icon={<Settings size={22} />} title="Settings" />
       <div className="grid grid-cols-2 gap-4">
-        <div className="bg-[#143322] rounded-lg p-4 border border-white/30">
+        <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
           <h3 className="text-green-300 font-bold text-sm mb-3">Organisation</h3>
           <div className="flex flex-col gap-2">
             <FI label="Organisation Name" value={settings.orgName} onChange={v => fc("orgName", v)} />
@@ -1495,7 +1496,7 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
             <FI label="Email" value={settings.orgEmail} onChange={v => fc("orgEmail", v)} />
           </div>
         </div>
-        <div className="bg-[#143322] rounded-lg p-4 border border-white/30">
+        <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
           <h3 className="text-green-300 font-bold text-sm mb-3">POS Configuration</h3>
           <div className="flex flex-col gap-2">
             <FI label="POS Name" value={settings.posName} onChange={v => fc("posName", v)} />
@@ -1505,7 +1506,7 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
             <FI label="Tax Rate (%)" value={String(settings.taxRate)} onChange={v => fc("taxRate", Number(v) || 0)} />
           </div>
         </div>
-        <div className="bg-[#143322] rounded-lg p-4 border border-white/30">
+        <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
           <h3 className="text-green-300 font-bold text-sm mb-3">Card Settings</h3>
           <div className="flex flex-col gap-2">
             <FI label="Registration Deposit (₹)" value={String(settings.regDeposit)} onChange={v => fc("regDeposit", Number(v) || 0)} />
@@ -1515,7 +1516,7 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
             <FI label="Low Balance Alert (₹)" value={String(settings.lowBalanceAlert)} onChange={v => fc("lowBalanceAlert", Number(v) || 0)} />
           </div>
         </div>
-        <div className="bg-[#143322] rounded-lg p-4 border border-white/30">
+        <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
           <h3 className="text-green-300 font-bold text-sm mb-3">Printer Settings</h3>
           <div className="flex flex-col gap-2">
             <FI label="Printer Name" value={settings.printerName} onChange={v => fc("printerName", v)} />
@@ -1760,7 +1761,7 @@ function MasterScreen({
   return (
     <div>
       <SectionTitle icon={<Layers size={22} />} title="Master Management Center" />
-      <div className="bg-[#143322] rounded-lg border border-white/30 overflow-hidden mb-4">
+      <div className="bg-[#091b33] rounded-lg border border-white/30 overflow-hidden mb-4">
         <div className="flex border-b border-white/20 flex-wrap">
           {(["category", "subcategory", "brand", "ship", "rank"] as const).map((t) => (
             <button key={t} onClick={() => setTab(t)}
@@ -2100,53 +2101,69 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background font-[Roboto,sans-serif] overflow-hidden">
+    <div className="flex flex-col h-screen bg-[#061224] text-slate-100 font-[Roboto,sans-serif] overflow-hidden">
       <Toaster position="top-right" richColors />
-      <header className="flex-shrink-0 bg-[#071a0d] border-b border-white/20">
-        <div className="text-center py-1 bg-[#050f08] border-b border-white/10">
-          <p className="text-white font-bold text-xs tracking-widest truncate">
-            {settings.orgName.toUpperCase()} — {settings.orgShortName.toUpperCase()} — {settings.orgAddress.toUpperCase()}
-          </p>
+      
+      {/* ── Top Header Banner (Matching Reference Image) ── */}
+      <header className="flex-shrink-0 relative z-20 border-b border-cyan-500/30 bg-[#071932] shadow-xl overflow-hidden">
+        {/* Background Banner Graphic */}
+        <div className="absolute inset-0 bg-cover bg-center opacity-25 mix-blend-luminosity" style={{ backgroundImage: `url(${navalBanner})` }} />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#040e1c]/95 via-[#0a203e]/90 to-[#040e1c]/95" />
+
+        {/* Banner Top Strip */}
+        <div className="relative z-10 text-center py-1 bg-[#030a16]/80 border-b border-cyan-500/20 backdrop-blur-sm">
+          <div className="flex items-center justify-center gap-3 px-4">
+            <div className="h-[1px] w-16 bg-gradient-to-r from-transparent via-amber-400 to-amber-500 hidden md:block" />
+            <p className="text-amber-400 font-extrabold text-[11px] tracking-[0.2em] uppercase drop-shadow flex items-center gap-1.5">
+              <span>AFLOAT RECREATION CENTER</span>
+              <span className="text-cyan-300/60 font-normal">| {settings.orgName.toUpperCase()} — {settings.orgShortName.toUpperCase()}</span>
+            </p>
+            <div className="h-[1px] w-16 bg-gradient-to-l from-transparent via-amber-400 to-amber-500 hidden md:block" />
+          </div>
         </div>
-        <div className="flex items-center px-3 gap-3">
-          {/* Far Left Start Logo */}
-          <div className="flex items-center gap-2 flex-shrink-0 py-1 pl-1 pr-3 border-r border-white/10">
-            <img src={fmuLogo} alt="FMU Visakhapatnam" className="h-10 w-auto object-contain drop-shadow" />
-            <div className="hidden lg:flex flex-col">
-              <span className="text-white font-extrabold text-[11px] tracking-wider leading-none">EASTERN NAVAL COMMAND</span>
-              <span className="text-amber-400 text-[9px] font-bold leading-tight">FLEET MAINTENANCE UNIT / ARC</span>
+
+        {/* Main Header Content Bar */}
+        <div className="relative z-10 flex items-center px-4 py-1.5 justify-between gap-3">
+          {/* Far Left Start Logo: Eastern Sword */}
+          <div className="flex items-center gap-3 flex-shrink-0 py-0.5 pr-3 border-r border-cyan-500/20">
+            <img src={easternSwordLogo} alt="Eastern Sword - The Sunrise Fleet" className="h-11 w-auto object-contain drop-shadow-[0_0_10px_rgba(251,191,36,0.4)]" />
+            <div className="hidden xl:flex flex-col">
+              <span className="text-slate-100 font-black text-xs tracking-wider leading-none">EASTERN SWORD</span>
+              <span className="text-amber-400 text-[9px] font-bold tracking-widest leading-tight">THE SUNRISE FLEET</span>
             </div>
           </div>
-          {/* Nav Items */}
-          <div className="flex items-center flex-1">
+
+          {/* Navigation Items in Center */}
+          <div className="flex items-center flex-1 justify-center">
             {NAV_ITEMS.map(item => (
               <button key={item.key} onClick={() => setScreen(item.key)}
-                className={`flex flex-col items-center px-4 py-2 gap-0.5 transition-colors border-b-2 ${screen === item.key ? "border-green-400 text-white bg-white/10" : "border-transparent text-white/70 hover:text-white hover:bg-white/5"
+                className={`flex flex-col items-center px-3.5 py-1.5 gap-0.5 transition-all rounded-lg border ${screen === item.key ? "border-cyan-400 text-cyan-200 bg-cyan-500/20 shadow-[0_0_15px_rgba(0,210,255,0.25)] font-bold" : "border-transparent text-slate-300/80 hover:text-white hover:bg-white/10"
                   }`}>
                 {item.icon}
                 <span className="text-[10px] font-semibold">{item.label}</span>
               </button>
             ))}
           </div>
-          {/* Far Right End Section with Eastern Sword Logo */}
+
+          {/* Far Right End Section: User Controls & Fleet Maintenance Unit Logo */}
           <div className="flex items-center gap-3 flex-shrink-0">
-            <div className="flex flex-col items-end gap-0.5">
-              <div className="flex items-center gap-1">
-                <span className="text-white/60 text-[10px]">User Name</span>
-                <span className="bg-[#3a8c2f] text-white text-[10px] font-bold px-2 py-0.5 rounded">{currentUser.username}</span>
-                <button onClick={() => window.location.reload()} className="bg-[#2d6a4f] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90">
+            <div className="flex flex-col items-end gap-1">
+              <div className="flex items-center gap-1.5">
+                <span className="text-cyan-200/70 text-[10px] font-semibold">User:</span>
+                <span className="bg-[#0284c7] text-white text-[10px] font-bold px-2 py-0.5 rounded shadow shadow-sky-500/20">{currentUser.username}</span>
+                <button onClick={() => window.location.reload()} className="bg-[#0369a1] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:bg-[#0284c7] transition-colors">
                   <RefreshCw size={10} />Refresh
                 </button>
-                <button onClick={() => onLogout()} className="bg-[#cc2222] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90">
+                <button onClick={() => onLogout()} className="bg-[#c22424] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:bg-[#dc2626] transition-colors">
                   <LogOut size={10} />Logout
                 </button>
               </div>
-              <button onClick={() => toast.success("Change password modal.")} className="bg-[#555] text-white text-[10px] px-2 py-0.5 rounded flex items-center gap-1 hover:opacity-90 self-end">
-                <KeyRound size={10} />Change Password
+              <button onClick={() => toast.success("Change password modal.")} className="bg-[#334155] text-slate-200 text-[9px] px-2 py-0.5 rounded flex items-center gap-1 hover:bg-[#475569] transition-colors self-end">
+                <KeyRound size={9} />Change Password
               </button>
             </div>
-            <div className="pl-2 border-l border-white/10 flex items-center">
-              <img src={easternSwordLogo} alt="Eastern Sword" className="h-10 w-auto object-contain drop-shadow" />
+            <div className="pl-3 border-l border-cyan-500/20 flex items-center">
+              <img src={fmuLogo} alt="Fleet Maintenance Unit Visakhapatnam" className="h-11 w-auto object-contain drop-shadow-[0_0_10px_rgba(56,189,248,0.4)]" />
             </div>
           </div>
         </div>

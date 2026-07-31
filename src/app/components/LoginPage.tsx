@@ -3,6 +3,7 @@ import { LogIn, Eye, EyeOff, Shield, Anchor } from "lucide-react";
 import { api } from "../api/client";
 import fmuLogo from "../fmu_logo.png";
 import easternSwordLogo from "../eastern_sword_logo.png";
+import navalBanner from "../naval_banner.jpg";
 
 // Demo credentials — in production these would come from an API
 const DEMO_USERS: Record<string, { role: string; id: string }> = {
@@ -64,61 +65,62 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
   });
 
   return (
-    <div className="login-root">
-      {/* ── Animated background mesh ── */}
-      <div className="login-bg">
-        <div className="login-bg-orb login-bg-orb-1" />
-        <div className="login-bg-orb login-bg-orb-2" />
-        <div className="login-bg-orb login-bg-orb-3" />
-        <div className="login-grid-overlay" />
-      </div>
+    <div className="login-root relative overflow-hidden bg-[#040d1a]">
+      {/* ── Background banner featuring Indian Navy warships, submarines & constellation map ── */}
+      <div className="absolute inset-0 bg-cover bg-center opacity-75 brightness-95 contrast-110 transition-transform duration-1000 scale-105" style={{ backgroundImage: `url(${navalBanner})` }} />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#041022]/90 via-[#061830]/75 to-[#020914]/95" />
+      <div className="login-grid-overlay opacity-30" />
 
-      {/* ── Top bar ── */}
-      <header className="login-topbar">
-        <div className="login-topbar-inner flex items-center justify-between px-4 w-full">
-          {/* Top Left Corner Logo */}
-          <div className="login-topbar-brand flex items-center gap-2">
-            <img src={fmuLogo} alt="FMU Visakhapatnam" className="h-9 w-auto object-contain drop-shadow-md" />
-            <span className="font-bold text-xs tracking-wider text-white/90">INDIAN NAVY — EASTERN NAVAL COMMAND</span>
+      {/* ── Top Header Banner (Matching Reference Image) ── */}
+      <header className="relative z-10 w-full border-b border-cyan-500/30 bg-[#061830]/90 shadow-xl backdrop-blur-md">
+        <div className="w-full flex items-center justify-between px-6 py-2">
+          {/* Left Corner Logo: Eastern Sword */}
+          <div className="flex items-center gap-3">
+            <img src={easternSwordLogo} alt="Eastern Sword - The Sunrise Fleet" className="h-14 w-auto object-contain drop-shadow-[0_0_12px_rgba(251,191,36,0.4)]" />
           </div>
-          {/* Top Right Corner Logo & Clock */}
-          <div className="login-topbar-clock flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="login-clock-date">{dateStr}</span>
-              <span className="login-clock-sep">|</span>
-              <span className="login-clock-time">{timeStr}</span>
+
+          {/* Center Banner Title */}
+          <div className="flex flex-col items-center text-center">
+            <h1 className="text-xl md:text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-gray-100 via-slate-200 to-gray-300 tracking-widest uppercase drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] font-[Cinzel,Georgia,serif]">
+              AFLOAT RECREATION CENTER
+            </h1>
+            <div className="flex items-center gap-2 mt-0.5">
+              <div className="h-[1px] w-12 bg-gradient-to-r from-transparent via-amber-400 to-amber-500" />
+              <span className="text-amber-400 text-[10px] font-bold tracking-[0.2em] uppercase drop-shadow">
+                EASTERN NAVAL COMMAND
+              </span>
+              <div className="h-[1px] w-12 bg-gradient-to-l from-transparent via-amber-400 to-amber-500" />
             </div>
-            <div className="pl-2 border-l border-white/20">
-              <img src={easternSwordLogo} alt="Eastern Sword" className="h-9 w-auto object-contain drop-shadow-md" />
+          </div>
+
+          {/* Right Corner Logo: Fleet Maintenance Unit & Clock */}
+          <div className="flex items-center gap-4">
+            <div className="hidden sm:flex flex-col items-end text-xs text-cyan-200/80 font-mono">
+              <span className="font-semibold tracking-wider text-cyan-300">{dateStr}</span>
+              <span className="text-amber-400 font-bold tracking-widest">{timeStr}</span>
             </div>
+            <div className="h-8 w-[1px] bg-cyan-500/30 hidden sm:block" />
+            <img src={fmuLogo} alt="Fleet Maintenance Unit" className="h-14 w-auto object-contain drop-shadow-[0_0_12px_rgba(56,189,248,0.4)]" />
           </div>
         </div>
       </header>
 
       {/* ── Center card ── */}
-      <main className="login-main">
-        <div className="login-card relative overflow-hidden">
-          {/* Glow ring */}
-          <div className="login-card-glow" />
-
-          {/* Corner Logos inside Card */}
-          <div className="flex items-center justify-between w-full mb-2 px-1">
-            <img src={fmuLogo} alt="Fleet Maintenance Unit" className="h-14 w-auto object-contain drop-shadow-lg hover:scale-105 transition-transform" />
-            <div className="flex flex-col items-center text-center">
-              <span className="text-[10px] font-bold text-amber-400/80 tracking-widest uppercase">FMU VISAKHAPATNAM</span>
-              <span className="text-[9px] text-white/40 tracking-wider">THE SUNRISE FLEET</span>
-            </div>
-            <img src={easternSwordLogo} alt="Eastern Sword - The Sunrise Fleet" className="h-14 w-auto object-contain drop-shadow-lg hover:scale-105 transition-transform" />
-          </div>
+      <main className="login-main relative z-10 flex-1 flex items-center justify-center p-4">
+        <div className="login-card relative w-full max-w-md p-8 rounded-2xl border border-cyan-500/30 bg-[#0a1e38]/90 shadow-[0_0_50px_rgba(0,180,255,0.2)] backdrop-blur-xl">
+          {/* Top accent line */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 via-cyan-400 to-amber-400 rounded-t-2xl" />
 
           {/* Heading */}
-          <div className="login-heading">
-            <h1 className="login-title">ARC</h1>
-            <p className="login-subtitle">Afloat Recreation Center</p>
-            <p className="login-subtitle2">Management System</p>
+          <div className="text-center mb-6">
+            <div className="inline-flex items-center justify-center p-2 rounded-full bg-cyan-500/10 border border-cyan-400/30 mb-3 shadow-[0_0_15px_rgba(0,210,255,0.2)]">
+              <Shield size={26} className="text-cyan-400" />
+            </div>
+            <h2 className="text-2xl font-black text-white tracking-widest uppercase">ARC LOGIN</h2>
+            <p className="text-amber-400/90 text-[10px] font-bold tracking-wider mt-1 uppercase">Eastern Naval Command</p>
           </div>
 
-          <div className="login-divider" />
+          <div className="h-[1px] w-full bg-gradient-to-r from-transparent via-cyan-500/30 to-transparent mb-6" />
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="login-form" autoComplete="off">
