@@ -59,24 +59,45 @@ export const FOOD_PRODUCTS = [
 ];
 
 export const PARTY_PRODUCTS = [
-  { code:"PTY-001", name:"BOILED PEANUT MASALA", category:"PARTY", sub:"PARTY VEG",    price:420, stock:10 },
-  { code:"PTY-002", name:"BUTTER CHICKEN",        category:"PARTY", sub:"PARTY NONVEG", price:800, stock:8  },
-  { code:"PTY-003", name:"BUTTER PANEER 250GMS",  category:"PARTY", sub:"VEGETARIAN",   price:150, stock:15 },
-  { code:"PTY-004", name:"BUTTER PULKA/ROTI",     category:"PARTY", sub:"BREAD/ROTI",   price:15,  stock:100},
-  { code:"PTY-005", name:"CHICKEN FRIED RICE",    category:"PARTY", sub:"NON VEGETARIAN",price:160,stock:20 },
-  { code:"PTY-006", name:"DAL FRY",               category:"PARTY", sub:"PARTY VEG",    price:650, stock:8  },
-  { code:"PTY-007", name:"MIX VEG",               category:"PARTY", sub:"PARTY VEG",    price:550, stock:10 },
+  // Party Drinks - Soft Drinks
+  { code:"PTY-DRK-001", name:"PEPSI 2.25L (PARTY)",      category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"PEPSI",     price:110, stock:50 },
+  { code:"PTY-DRK-002", name:"7 UP 2.25L (PARTY)",       category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"7 UP",      price:110, stock:40 },
+  { code:"PTY-DRK-003", name:"MIRINDA 2.25L (PARTY)",    category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"MIRINDA",   price:110, stock:35 },
+  { code:"PTY-DRK-004", name:"SODA 1L (PARTY)",          category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"KINLEY",    price:40,  stock:100},
+  { code:"PTY-DRK-005", name:"RED BULL 250ML (PARTY)",   category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"RED BULL",  price:125, stock:60 },
+
+  // Party Drinks - Hard Drinks
+  { code:"PTY-DRK-006", name:"BLACK DOG TRIPLE (PARTY)", category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"BLACK DOG", price:1850,stock:20 },
+  { code:"PTY-DRK-007", name:"ANTIQUITY BLUE (PARTY)",   category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"ANTIQUITY", price:1450,stock:15 },
+  { code:"PTY-DRK-008", name:"BACARDI LEMON (PARTY)",    category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"BACARDI",   price:1200,stock:25 },
+  { code:"PTY-DRK-009", name:"OLD MONK RUM (PARTY)",     category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"OLD MONK",  price:950, stock:30 },
+  { code:"PTY-DRK-010", name:"KINGFISHER STRONG CRATE",  category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"KINGFISHER",price:2400,stock:12 },
+  { code:"PTY-DRK-011", name:"SMIRNOFF VODKA (PARTY)",   category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"SMIRNOFF",  price:1350,stock:18 },
+  { code:"PTY-DRK-012", name:"CHIVAS REGAL 12 YRS",      category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"CHIVAS",    price:2800,stock:15 },
+  { code:"PTY-DRK-013", name:"JACK DANIEL'S TENNESSEE",  category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"JACK DANIEL",price:3100,stock:10 },
+  { code:"PTY-DRK-014", name:"ABSOLUT VODKA 1L",         category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"ABSOLUT",   price:1950,stock:20 },
+  { code:"PTY-DRK-015", name:"HEINEKEN LAGER CRATE",    category:"PARTY", sub:"PARTY DRINKS", subSub:"HARD DRINKS", brand:"HEINEKEN",  price:2900,stock:10 },
+  { code:"PTY-DRK-016", name:"RED BULL 24 PACK",         category:"PARTY", sub:"PARTY DRINKS", subSub:"SOFT DRINKS", brand:"RED BULL",  price:2600,stock:25 },
+
+  // Party Food - Vegetarian
+  { code:"PTY-FOD-001", name:"BOILED PEANUT MASALA",     category:"PARTY", sub:"PARTY FOOD",   subSub:"VEGETARIAN",  brand:"PARTY VEG", price:420, stock:10 },
+  { code:"PTY-FOD-002", name:"BUTTER PANEER PLATTER",    category:"PARTY", sub:"PARTY FOOD",   subSub:"VEGETARIAN",  brand:"PARTY VEG", price:650, stock:15 },
+  { code:"PTY-FOD-003", name:"DAL FRY LARGE BOWL",       category:"PARTY", sub:"PARTY FOOD",   subSub:"VEGETARIAN",  brand:"PARTY VEG", price:550, stock:12 },
+  { code:"PTY-FOD-004", name:"MIX VEG PARTY PACK",       category:"PARTY", sub:"PARTY FOOD",   subSub:"VEGETARIAN",  brand:"PARTY VEG", price:500, stock:10 },
+  { code:"PTY-FOD-005", name:"SWEET CORN PARTY BOWL",    category:"PARTY", sub:"PARTY FOOD",   subSub:"VEGETARIAN",  brand:"PARTY VEG", price:380, stock:20 },
+
+  // Party Food - Non-Vegetarian
+  { code:"PTY-FOD-006", name:"BUTTER CHICKEN PARTY TRAY",category:"PARTY", sub:"PARTY FOOD",   subSub:"NON VEGETARIAN",brand:"PARTY NONVEG",price:950,stock:8 },
+  { code:"PTY-FOD-007", name:"CHILLY CHICKEN 1KG TRAY",  category:"PARTY", sub:"PARTY FOOD",   subSub:"NON VEGETARIAN",brand:"PARTY NONVEG",price:850,stock:10},
+  { code:"PTY-FOD-008", name:"CHICKEN FRIED RICE TRAY", category:"PARTY", sub:"PARTY FOOD",   subSub:"NON VEGETARIAN",brand:"PARTY NONVEG",price:750,stock:15},
+  { code:"PTY-FOD-009", name:"EGG FRIED RICE TRAY",     category:"PARTY", sub:"PARTY FOOD",   subSub:"NON VEGETARIAN",brand:"PARTY NONVEG",price:600,stock:12},
+
+  // Party Food - Bread & Roti
+  { code:"PTY-FOD-010", name:"BUTTER PULKA 50 PCS",      category:"PARTY", sub:"PARTY FOOD",   subSub:"BREAD/ROTI",  brand:"PARTY BREAD",price:600,stock:20 },
+  { code:"PTY-FOD-011", name:"GARLIC NAAN 20 PCS",       category:"PARTY", sub:"PARTY FOOD",   subSub:"BREAD/ROTI",  brand:"PARTY BREAD",price:700,stock:15 },
 ];
 
-export const PARTY_FOOD_PRODUCTS = [
-  { code:"PFD-001", name:"BLACK DOG PLAIN",        category:"PARTY FOOD", sub:"WHISKY",       price:45,  stock:322 },
-  { code:"PFD-002", name:"BOILED PEANUT 150GMS",   category:"PARTY FOOD", sub:"VEGETARIAN",   price:75,  stock:40  },
-  { code:"PFD-003", name:"CHILLY CHICKEN 250GMS",  category:"PARTY FOOD", sub:"NON VEG",      price:200, stock:30  },
-  { code:"PFD-004", name:"KINGFISHER STRONG",       category:"PARTY FOOD", sub:"BEER",         price:49,  stock:130 },
-  { code:"PFD-005", name:"EGG FRIED RICE",         category:"PARTY FOOD", sub:"NON VEG",      price:130, stock:25  },
-];
-
-export const ALL_PRODUCTS = [...LIQUOR_PRODUCTS, ...SOFT_DRINK_PRODUCTS, ...FOOD_PRODUCTS, ...PARTY_PRODUCTS, ...PARTY_FOOD_PRODUCTS];
+export const ALL_PRODUCTS = [...LIQUOR_PRODUCTS, ...SOFT_DRINK_PRODUCTS, ...FOOD_PRODUCTS, ...PARTY_PRODUCTS];
 
 export const SAILORS_DATA = [
   { id:"0001777486", name:"ARC MASTER CARD 1",    mobile:"9811396884", pNo:"44361W",    rank:"CPO",     unit:"INS DELHI",        type:"JUNIOR SAILOR",  address:"Block 4, Naval Colony, Mumbai",          dob:"12/05/1985", regRefund:50  },
