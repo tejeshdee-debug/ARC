@@ -1,4 +1,13 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+function getApiBaseUrl(): string {
+  let url = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  url = url.replace(/\/+$/, "");
+  if (!url.endsWith("/api")) {
+    url = `${url}/api`;
+  }
+  return url;
+}
+
+const API_BASE = getApiBaseUrl();
 
 export async function apiRequest<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${endpoint}`, {
