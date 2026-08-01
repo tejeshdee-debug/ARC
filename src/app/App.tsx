@@ -200,7 +200,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     return Array.from(new Set(["Others", ...list]));
   }, [masterShips]);
 
-  const isPartyMode = activeCat === "PARTY" || orderItems.some(i => (i.qtyType || "").toUpperCase().includes("PARTY"));
+  const isPartyMode = activeCat === "PARTY";
 
   const subCategories = useMemo(() => {
     let subs: string[] = [];
@@ -1679,7 +1679,7 @@ function ReportsScreen({ products: _p, sailors, stockData, salesReport, consoleR
   return (
     <div>
       <SectionTitle icon={<BarChart2 size={22} />} title="Reports" />
-      <div className="bg-[#143322] rounded-lg p-4 border border-white/30 mb-4">
+      <div className="bg-[#091b33] rounded-lg p-4 border border-cyan-500/30 mb-4 shadow-lg">
         <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-3">
           <FS label="Reports Type" value={reportType} onChange={handleReportTypeChange} options={Object.keys(REPORT_CONFIG)} />
           <FS label="Search Type" value={searchType} onChange={setSearchType} options={REPORT_CONFIG[reportType].searchTypes} />
@@ -1688,7 +1688,7 @@ function ReportsScreen({ products: _p, sailors, stockData, salesReport, consoleR
         </div>
         <div className="flex items-center gap-2">
           <span className="text-white text-sm font-semibold">Search</span>
-          <input value={search} onChange={e => setSearch(e.target.value)} className="bg-white text-gray-900 text-sm px-2 py-1 rounded w-56" placeholder="Filter results..." />
+          <input value={search} onChange={e => setSearch(e.target.value)} className="bg-[#061830] border border-cyan-500/30 text-white text-sm px-3 py-1.5 rounded w-64 outline-none focus:border-cyan-400 placeholder:text-white/40 font-medium" placeholder="Filter results..." />
         </div>
       </div>
       <Table cols={cols} rows={filtered} />
@@ -1730,7 +1730,7 @@ function UserManagement({ users, setUsers, onNavigateTo }: any) {
   return (
     <div>
       <SectionTitle icon={<UserCog size={22} />} title="User Management" />
-      <div className="bg-[#143322] rounded-lg p-4 mb-4 border border-white/30">
+      <div className="bg-[#091b33] rounded-lg p-4 mb-4 border border-cyan-500/30 shadow-lg">
         <div className="grid grid-cols-2 gap-x-8 gap-y-3">
           <FI label="Username" value={un} onChange={setUn} required />
           <FS label="Role" value={role} onChange={setRole} options={["Super Admin", "Bar Admin", "POS User", "Stock Manager", "Report Viewer"]} required />
