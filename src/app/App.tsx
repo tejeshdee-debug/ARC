@@ -129,6 +129,39 @@ function POSScreen({ products, setProducts, sailors, setSailors,
   const [selectShip, setSelectShip] = useState("Others");
   const [bookingDate] = useState(new Date().toLocaleDateString("en-GB"));
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
+  const [rightPanelTab, setRightPanelTab] = useState<"orders" | "stock">("orders");
+  const [recentOrders, setRecentOrders] = useState<any[]>([
+    {
+      id: "ORD-847291",
+      billNo: "TRN104928172",
+      timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+      date: new Date().toLocaleDateString("en-GB"),
+      sailorName: "ARC MASTER CARD 1",
+      sailorId: "0001777486",
+      total: 450.00,
+      items: [{ name: "CHICKEN BIRYANI", qty: 2, price: 180 }, { name: "COCA COLA 2L", qty: 1, price: 90 }]
+    },
+    {
+      id: "ORD-739201",
+      billNo: "TRN104928155",
+      timestamp: "14:15:42",
+      date: new Date().toLocaleDateString("en-GB"),
+      sailorName: "RAMESHWARAM SHARMA",
+      sailorId: "0000869834",
+      total: 240.00,
+      items: [{ name: "BUTTER CHICKEN PARTY TRAY", qty: 1, price: 240 }]
+    },
+    {
+      id: "ORD-618492",
+      billNo: "TRN104928102",
+      timestamp: "13:58:05",
+      date: new Date().toLocaleDateString("en-GB"),
+      sailorName: "RAMAN CHIB",
+      sailorId: "0001826650",
+      total: 120.00,
+      items: [{ name: "BUTTER NAAN", qty: 4, price: 30 }]
+    }
+  ]);
 
   // ── Checkout ──
   const [showCheckout, setShowCheckout] = useState(false);
@@ -319,6 +352,18 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       setSailors(prev => prev.map(s =>
         (s.id === sailor.id || s.pNo === sailor.pNo || s.mobile === sailor.mobile) ? { ...s, balance: res.remainingBalance } : s
       ));
+
+      const newRecentOrder = {
+        id: res.orderNo || `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
+        billNo: res.billNo || `TRN${Math.floor(100000000 + Math.random() * 900000000)}`,
+        timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+        date: res.date || new Date().toLocaleDateString("en-GB"),
+        sailorName: res.sailor?.name || sailor.name,
+        sailorId: sailor.id,
+        total: grandTotal,
+        items: orderItems.map(i => ({ name: i.name, qty: i.qty, price: i.price }))
+      };
+      setRecentOrders(prev => [newRecentOrder, ...prev]);
 
       setReceipt({ billNo: res.billNo, orderNo: res.orderNo, sailor: res.sailor, items: [...orderItems], total: grandTotal, date: res.date });
       setShowCheckout(false);
@@ -659,27 +704,76 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             </button>
           </div>
 
-          {/* Live Stock Panel */}
-          <div className="flex-1 flex flex-col gap-1 min-h-0 bg-[#061830] border border-white/10 rounded-lg p-2">
-            <div className="text-white text-[10px] font-bold text-center bg-[#0369a1] py-1 rounded">Live Stock</div>
-            <div className="bg-white rounded overflow-auto flex-1">
-              <table className="w-full text-[10px] border-collapse">
-                <thead className="sticky top-0">
-                  <tr className="bg-[#0369a1]">
-                    <th className="text-white font-bold px-2 py-1 text-left">Item</th>
-                    <th className="text-white font-bold px-1 py-1 text-right">Qty</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.slice(0, 40).map((p, i) => (
-                    <tr key={p.code} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f0f9ff" }}>
-                      <td className="px-2 py-0.5 text-gray-800 truncate max-w-[120px]">{p.name}</td>
-                      <td className={`px-1 py-0.5 text-right font-semibold ${p.stock < 10 ? "text-red-500" : "text-gray-700"}`}>{p.stock}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          {/* Right Panel Tabs: Recent Orders / Live Stock */}
+          <div className="flex-1 flex flex-col gap-1 min-h-0 bg-[#061830] border border-cyan-500/30 rounded-lg p-2 shadow-lg">
+            {/* Tab Selector Header */}
+            <div className="flex bg-[#0369a1]/40 p-0.5 rounded border border-cyan-500/30 flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => setRightPanelTab("orders")}
+                className={`flex-1 py-1 text-[10px] font-bold rounded transition flex items-center justify-center gap-1 ${
+                  rightPanelTab === "orders" ? "bg-[#0284c7] text-white shadow" : "text-cyan-200/70 hover:text-white"
+                }`}>
+                📋 Recent Orders ({recentOrders.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setRightPanelTab("stock")}
+                className={`flex-1 py-1 text-[10px] font-bold rounded transition flex items-center justify-center gap-1 ${
+                  rightPanelTab === "stock" ? "bg-[#0284c7] text-white shadow" : "text-cyan-200/70 hover:text-white"
+                }`}>
+                📦 Live Stock
+              </button>
             </div>
+
+            {/* Tab 1: Recent Orders with Timestamp */}
+            {rightPanelTab === "orders" ? (
+              <div className="bg-[#091b33] rounded overflow-auto flex-1 border border-white/10 p-1">
+                {recentOrders.length === 0 ? (
+                  <div className="text-center text-white/40 text-xs py-8">No recent orders yet.</div>
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    {recentOrders.map((ord, i) => (
+                      <div key={i} className="p-2 bg-[#061830] rounded border border-cyan-500/20 hover:border-cyan-400/50 transition">
+                        <div className="flex items-center justify-between text-[10px]">
+                          <span className="font-bold text-amber-400">{ord.id}</span>
+                          <span className="font-mono text-cyan-300 font-bold bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                            ⏱ {ord.timestamp}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-[10px] mt-1">
+                          <span className="text-white font-semibold truncate max-w-[130px]">{ord.sailorName}</span>
+                          <span className="text-cyan-400 font-bold">₹{ord.total.toFixed(2)}</span>
+                        </div>
+                        <div className="text-[9px] text-white/50 truncate mt-0.5">
+                          {ord.items.map((it: any) => `${it.name} ×${it.qty}`).join(", ")}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Tab 2: Live Stock */
+              <div className="bg-white rounded overflow-auto flex-1">
+                <table className="w-full text-[10px] border-collapse">
+                  <thead className="sticky top-0">
+                    <tr className="bg-[#0369a1]">
+                      <th className="text-white font-bold px-2 py-1 text-left">Item</th>
+                      <th className="text-white font-bold px-1 py-1 text-right">Qty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.slice(0, 40).map((p, i) => (
+                      <tr key={p.code} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f0f9ff" }}>
+                        <td className="px-2 py-0.5 text-gray-800 truncate max-w-[120px]">{p.name}</td>
+                        <td className={`px-1 py-0.5 text-right font-semibold ${p.stock < 10 ? "text-red-500" : "text-gray-700"}`}>{p.stock}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       </div>
