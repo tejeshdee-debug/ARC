@@ -19,7 +19,7 @@ import {
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen = "pos" | "products" | "master" | "sailor" | "stock" | "vendor" | "reports" | "user" | "card" | "settings";
-type Category = "ALL" | "LIQUOR" | "SOFT DRINKS" | "FOOD" | "PARTY";
+type Category = "ALL" | "LIQUOR" | "SOFT DRINKS" | "FOOD" | "PARTY" | string;
 
 // ─── Shared UI ────────────────────────────────────────────────────────────────
 function Btn({ children, onClick, variant = "primary", className = "", type = "button" }: {
@@ -117,51 +117,21 @@ interface POSProps {
   newSalesReport: any[]; setNewSalesReport: React.Dispatch<React.SetStateAction<any[]>>;
   categories?: any[];
   brands?: any[];
+  ships?: any[];
 }
 
 function POSScreen({ products, setProducts, sailors, setSailors,
   salesReport, setSalesReport, consoleReport, setConsoleReport,
-  newSalesReport, setNewSalesReport, categories: masterCategories = [], brands: masterBrands = [] }: POSProps) {
+  newSalesReport, setNewSalesReport, categories: masterCategories = [], brands: masterBrands = [], ships: masterShips = [] }: POSProps) {
 
-  const [activeCat, setActiveCat] = useState<Category>("LIQUOR");
+  const [activeCat, setActiveCat] = useState<string>("LIQUOR");
   const [activeSubCat, setActiveSubCat] = useState<string>("ALL");
   const [activeBrand, setActiveBrand] = useState<string>("ALL");
   const [selectShip, setSelectShip] = useState("Others");
   const [bookingDate] = useState(new Date().toLocaleDateString("en-GB"));
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [rightPanelTab, setRightPanelTab] = useState<"orders" | "stock">("orders");
-  const [recentOrders, setRecentOrders] = useState<any[]>([
-    {
-      id: "ORD-847291",
-      billNo: "TRN104928172",
-      timestamp: new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-      date: new Date().toLocaleDateString("en-GB"),
-      sailorName: "ARC MASTER CARD 1",
-      sailorId: "0001777486",
-      total: 450.00,
-      items: [{ name: "CHICKEN BIRYANI", qty: 2, price: 180 }, { name: "COCA COLA 2L", qty: 1, price: 90 }]
-    },
-    {
-      id: "ORD-739201",
-      billNo: "TRN104928155",
-      timestamp: "14:15:42",
-      date: new Date().toLocaleDateString("en-GB"),
-      sailorName: "RAMESHWARAM SHARMA",
-      sailorId: "0000869834",
-      total: 240.00,
-      items: [{ name: "BUTTER CHICKEN PARTY TRAY", qty: 1, price: 240 }]
-    },
-    {
-      id: "ORD-618492",
-      billNo: "TRN104928102",
-      timestamp: "13:58:05",
-      date: new Date().toLocaleDateString("en-GB"),
-      sailorName: "RAMAN CHIB",
-      sailorId: "0001826650",
-      total: 120.00,
-      items: [{ name: "BUTTER NAAN", qty: 4, price: 30 }]
-    }
-  ]);
+  const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
   const [stockSearch, setStockSearch] = useState("");
   const [orderSearch, setOrderSearch] = useState("");
@@ -202,7 +172,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     loadRecentOrders();
   }, []);
 
-  // ── Checkout ──
+  // ── Checkout Modal ──
   const [showCheckout, setShowCheckout] = useState(false);
   const [popupCard, setPopupCard] = useState("");
   const [popupSailor, setPopupSailor] = useState<any | null>(null);
@@ -222,6 +192,15 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     ALL: "#4f86c6", LIQUOR: "#5b8dd9", "SOFT DRINKS": "#3db48c",
     FOOD: "#7ab648", PARTY: "#c46db0",
   };
+
+  const shipOptions = useMemo(() => {
+    const list = (masterShips && masterShips.length > 0)
+      ? masterShips.map((s: any) => s.name)
+      : ["ENC BARRACKS", "FMU", "INS DELHI", "INS KOLKATA", "INS MYSORE", "INS SHIVALIK", "INS VIKRANT", "NAVAL DOCKYARD"];
+    return Array.from(new Set(["Others", ...list]));
+  }, [masterShips]);
+
+  const isPartyMode = activeCat === "PARTY" || orderItems.some(i => (i.qtyType || "").toUpperCase().includes("PARTY"));
 
   const subCategories = useMemo(() => {
     let subs: string[] = [];
@@ -350,18 +329,21 @@ function POSScreen({ products, setProducts, sailors, setSailors,
   function clearOrder() { setOrderItems([]); }
 
   // ── Open checkout / Direct payment ──
+  // ── Open checkout / Direct payment ──
   function openCheckout() {
     if (orderItems.length === 0) { toast.error("No items in cart!"); return; }
-    if (popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance) {
-      confirmPayment();
-    } else {
-      setShowCheckout(true);
-    }
+    confirmPayment();
   }
 
   // ── Live card lookup inside popup ──
   function handlePopupCardChange(val: string) {
-    setPopupCard(val); setPopupError("");
+    setPopupCard(val);
+    setPopupError("");
+    if (!val.trim()) {
+      setPopupSailor(null);
+      popupSailorRef.current = null;
+      return;
+    }
     const found = sailors.find((s: any) => s.id === val || s.pNo === val || s.mobile === val) || null;
     setPopupSailor(found);
     popupSailorRef.current = found; // always up-to-date, no stale closure
@@ -369,8 +351,42 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
   // ── Confirm payment ──
   async function confirmPayment() {
-    const sailor = popupSailorRef.current;
-    if (!sailor) { setPopupError("Card not found. Try Sailor ID, P.No or Mobile."); return; }
+    if (orderItems.length === 0) { toast.error("No items in cart!"); return; }
+
+    let sailor = popupSailorRef.current;
+    let cardNoToUse = popupCard.trim();
+
+    // 1. If card number typed in input but not yet looked up, search sailors:
+    if (!sailor && cardNoToUse) {
+      const found = sailors.find((s: any) => s.id === cardNoToUse || s.pNo === cardNoToUse || s.mobile === cardNoToUse);
+      if (found) {
+        sailor = found;
+        popupSailorRef.current = found;
+        setPopupSailor(found);
+      }
+    }
+
+    // 2. If in Party mode and no sailor swiped OR card input is empty, fallback to Party Booking Account
+    if ((!sailor || !cardNoToUse) && (isPartyMode || activeCat === "PARTY")) {
+      sailor = {
+        id: `PARTY-${selectShip.replace(/\s+/g, "_")}`,
+        name: `PARTY BOOKING (${selectShip})`,
+        pNo: "PARTY-BOOKING",
+        rank: "UNIT / SHIP",
+        unit: selectShip,
+        type: "PARTY",
+        balance: 999999,
+        status: "Active"
+      };
+      cardNoToUse = sailor.id;
+    }
+
+    // 3. If still no sailor in normal non-party mode, open Checkout Modal Popup!
+    if (!sailor) {
+      setShowCheckout(true);
+      return;
+    }
+
     if (sailor.status === "Deactive") { setPopupError("Card is DEACTIVATED. Transaction blocked."); return; }
     if (sailor.status === "Lost") { setPopupError("Card is reported LOST. Transaction blocked."); return; }
     if (grandTotal > sailor.balance) {
@@ -379,7 +395,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     }
 
     try {
-      const res = await api.checkout(popupCard, selectShip, orderItems);
+      const res = await api.checkout(cardNoToUse, selectShip, orderItems);
 
       // Update local state from server result
       setProducts(prev => prev.map(p => {
@@ -387,9 +403,11 @@ function POSScreen({ products, setProducts, sailors, setSailors,
         return o ? { ...p, stock: Math.max(0, p.stock - o.qty) } : p;
       }));
 
-      setSailors(prev => prev.map(s =>
-        (s.id === sailor.id || s.pNo === sailor.pNo || s.mobile === sailor.mobile) ? { ...s, balance: res.remainingBalance } : s
-      ));
+      if (sailor.id && !sailor.id.startsWith("PARTY-")) {
+        setSailors(prev => prev.map(s =>
+          (s.id === sailor.id || s.pNo === sailor.pNo || s.mobile === sailor.mobile) ? { ...s, balance: res.remainingBalance } : s
+        ));
+      }
 
       const newRecentOrder = {
         id: res.orderNo || `ORD-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -403,13 +421,22 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       };
       setRecentOrders(prev => [newRecentOrder, ...prev]);
 
-      setReceipt({ billNo: res.billNo, orderNo: res.orderNo, sailor: res.sailor, items: [...orderItems], total: grandTotal, date: res.date });
+      setReceipt({
+        billNo: res.billNo || newRecentOrder.billNo,
+        orderNo: res.orderNo || newRecentOrder.id,
+        sailor: res.sailor || sailor,
+        items: [...orderItems],
+        total: grandTotal,
+        date: res.date || newRecentOrder.date
+      });
       setShowCheckout(false);
       popupSailorRef.current = null;
       setPopupCard("");
       setPopupSailor(null);
       clearOrder();
-      toast.success(`Payment Successful! ₹${grandTotal.toFixed(2)} deducted. Remaining Balance: ₹${res.remainingBalance.toFixed(2)}`);
+      toast.success(isPartyMode || activeCat === "PARTY"
+        ? `Party Booking Order Confirmed for ${selectShip}!`
+        : `Payment Successful! ₹${grandTotal.toFixed(2)} deducted.`);
     } catch (err: any) {
       setPopupError(err.message || "Payment transaction failed.");
     }
@@ -656,15 +683,36 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
         {/* Order area */}
         <div className="flex-1 flex flex-col gap-2 min-w-0">
-          {/* Ship / Date */}
-          <div className="flex items-center gap-3 flex-shrink-0">
-            <span className="text-white text-xs font-semibold">Select Ship</span>
-            <select value={selectShip} onChange={e => setSelectShip(e.target.value)}
-              className="bg-white text-gray-800 text-xs px-2 py-1 rounded w-32">
-              {["Others", "INS DELHI", "INS VIKRANT", "INS KOLKATA", "INS MYSORE", "INS SHIVALIK"].map(s => <option key={s}>{s}</option>)}
+          {/* Ship / Date Header Bar */}
+          <div className="flex items-center gap-3 flex-shrink-0 bg-[#091b33] border border-cyan-500/30 rounded px-3 py-1.5">
+            <span className="text-white text-xs font-bold">Select Ship</span>
+            <select
+              value={selectShip}
+              onChange={e => setSelectShip(e.target.value)}
+              className={`text-xs px-2.5 py-1 rounded font-bold outline-none border transition ${
+                isPartyMode || activeCat === "PARTY"
+                  ? "bg-amber-100 text-amber-900 border-amber-500 ring-2 ring-amber-400"
+                  : "bg-white text-gray-800 border-gray-300 focus:border-cyan-500"
+              }`}>
+              {shipOptions.map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
             </select>
-            <span className="text-white text-xs font-semibold">Booking Date</span>
-            <input value={bookingDate} readOnly className="bg-white text-gray-800 text-xs px-2 py-1 rounded w-28" />
+
+            <span className="text-white text-xs font-bold ml-2">Booking Date</span>
+            <input
+              value={bookingDate}
+              readOnly
+              className="bg-white text-gray-800 text-xs px-2 py-1 rounded w-28 font-semibold text-center border border-gray-300"
+            />
+
+            {(isPartyMode || activeCat === "PARTY") && (
+              <span className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded ml-auto flex items-center gap-1">
+                🎉 Party Order Mode (Card Optional)
+              </span>
+            )}
           </div>
 
           {/* Cart table */}
@@ -741,14 +789,14 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
             <div className="flex flex-col gap-1">
               <label className="text-white/70 text-[10px] font-semibold block uppercase tracking-wider">
-                Card No
+                {isPartyMode || activeCat === "PARTY" ? "Card No (Optional for Party)" : "Card No"}
               </label>
               <input
                 ref={cardInputRef}
                 value={popupCard}
                 onChange={e => handlePopupCardChange(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && confirmPayment()}
-                placeholder="e.g. 0001777486 or 44361W"
+                placeholder={isPartyMode || activeCat === "PARTY" ? "Optional for Party Order" : "e.g. 0001777486 or 44361W"}
                 className={`w-full font-bold text-xs px-2 py-1.5 rounded outline-none border transition ${popupSailor
                   ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
                   : popupCard.length > 0
@@ -782,7 +830,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             )}
 
             {/* Error display */}
-            {popupError && (
+            {popupError && !(isPartyMode && !popupCard.trim()) && (
               <div className="bg-red-900/50 border border-red-500/50 rounded px-2 py-1 text-red-300 text-[10px] font-semibold">
                 ⚠ {popupError}
               </div>
@@ -794,6 +842,11 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                 <div className="text-[10px] font-semibold text-cyan-300 flex items-center justify-between bg-cyan-950/80 px-2 py-1.5 rounded border border-cyan-500/40">
                   <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Card Swiped</span>
                   <span className="text-amber-300 font-bold">Ready for Checkout</span>
+                </div>
+              ) : (isPartyMode || activeCat === "PARTY") ? (
+                <div className="text-[10px] font-semibold text-amber-300 flex items-center justify-between bg-amber-950/70 px-2 py-1.5 rounded border border-amber-500/40">
+                  <span className="flex items-center gap-1">🎉 Party Mode</span>
+                  <span className="text-white font-bold">Bill to {selectShip}</span>
                 </div>
               ) : (
                 <div className="text-[10px] text-white/50 text-center py-1 bg-[#061830] rounded border border-white/10">
@@ -2247,9 +2300,14 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
     { id: 9, name: "BREAD/ROTI", categoryName: "PARTY", subCategoryName: "PARTY FOOD", description: "Party Bread & Roti" },
   ]);
   const [ships, setShips] = useState<any[]>([
-    { id: 1, name: "INS DELHI", command: "Eastern Fleet", status: "Active" },
-    { id: 2, name: "INS VIKRANT", command: "Eastern Fleet", status: "Active" },
-    { id: 3, name: "INS KOLKATA", command: "Eastern Fleet", status: "Active" }
+    { id: 1, name: "ENC BARRACKS", command: "ENC Visakhapatnam", status: "Active" },
+    { id: 2, name: "FMU", command: "Eastern Fleet", status: "Active" },
+    { id: 3, name: "INS DELHI", command: "Eastern Fleet", status: "Active" },
+    { id: 4, name: "INS KOLKATA", command: "Eastern Fleet", status: "Active" },
+    { id: 5, name: "INS MYSORE", command: "Eastern Fleet", status: "Active" },
+    { id: 6, name: "INS SHIVALIK", command: "Eastern Fleet", status: "Active" },
+    { id: 7, name: "INS VIKRANT", command: "Eastern Fleet", status: "Active" },
+    { id: 8, name: "NAVAL DOCKYARD", command: "ENC Visakhapatnam", status: "Active" }
   ]);
   const [ranks, setRanks] = useState<any[]>([
     { id: 1, name: "MCPO I", category: "MASTER CHIEF PETTY OFFICER" },
