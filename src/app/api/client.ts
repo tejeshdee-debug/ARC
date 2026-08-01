@@ -1,5 +1,9 @@
 function getApiBaseUrl(): string {
-  let url = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  let url = import.meta.env.VITE_API_URL;
+  if ((!url || url.includes("localhost")) && typeof window !== "undefined" && window.location.hostname.includes("netlify.app")) {
+    url = "https://arc-backend-7gn6.onrender.com/api";
+  }
+  url = url || "http://localhost:5000/api";
   url = url.replace(/\/+$/, "");
   if (!url.endsWith("/api")) {
     url = `${url}/api`;
