@@ -317,13 +317,16 @@ function POSScreen({ products, setProducts, sailors, setSailors,
       }));
 
       setSailors(prev => prev.map(s =>
-        s.id === sailor.id ? { ...s, balance: res.remainingBalance } : s
+        (s.id === sailor.id || s.pNo === sailor.pNo || s.mobile === sailor.mobile) ? { ...s, balance: res.remainingBalance } : s
       ));
 
       setReceipt({ billNo: res.billNo, orderNo: res.orderNo, sailor: res.sailor, items: [...orderItems], total: grandTotal, date: res.date });
       setShowCheckout(false);
       popupSailorRef.current = null;
+      setPopupCard("");
+      setPopupSailor(null);
       clearOrder();
+      toast.success(`Payment Successful! ₹${grandTotal.toFixed(2)} deducted. Remaining Balance: ₹${res.remainingBalance.toFixed(2)}`);
     } catch (err: any) {
       setPopupError(err.message || "Payment transaction failed.");
     }
@@ -400,7 +403,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             {/* Balance remaining */}
             <div className="px-6 py-2 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs">
               <span className="text-gray-400 font-semibold">Remaining Balance</span>
-              <span className="text-gray-600 font-bold">₹{(receipt.sailor.balance - receipt.total).toFixed(2)}</span>
+              <span className="text-gray-600 font-bold">₹{Number(receipt.sailor.balance).toFixed(2)}</span>
             </div>
 
             {/* Actions */}
@@ -587,7 +590,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
             <div className="flex flex-col gap-1">
               <label className="text-white/70 text-[10px] font-semibold block uppercase tracking-wider">
-                Card No / P.No / Mobile
+                Card No
               </label>
               <input
                 ref={cardInputRef}
@@ -596,10 +599,10 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                 onKeyDown={e => e.key === "Enter" && confirmPayment()}
                 placeholder="e.g. 0001777486 or 44361W"
                 className={`w-full font-bold text-xs px-2 py-1.5 rounded outline-none border transition ${popupSailor
-                    ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
-                    : popupCard.length > 0
-                      ? "bg-red-50 text-gray-900 border-red-400"
-                      : "bg-white text-gray-900 border-gray-300 focus:border-cyan-500"
+                  ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
+                  : popupCard.length > 0
+                    ? "bg-red-50 text-gray-900 border-red-400"
+                    : "bg-white text-gray-900 border-gray-300 focus:border-cyan-500"
                   }`}
               />
               {popupCard.length > 0 && !popupSailor && (
@@ -639,8 +642,8 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               onClick={confirmPayment}
               disabled={orderItems.length === 0 || !popupSailor || popupSailor.status !== "Active" || grandTotal > popupSailor.balance}
               className={`w-full py-2 rounded text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow ${orderItems.length > 0 && popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance
-                  ? "bg-sky-600 hover:bg-sky-500 active:scale-95 cursor-pointer"
-                  : "bg-sky-900/30 text-white/40 cursor-not-allowed border border-white/10"
+                ? "bg-sky-600 hover:bg-sky-500 active:scale-95 cursor-pointer"
+                : "bg-sky-900/30 text-white/40 cursor-not-allowed border border-white/10"
                 }`}>
               <CreditCard size={13} />
               {orderItems.length === 0
@@ -2103,7 +2106,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
   return (
     <div className="flex flex-col h-screen bg-[#061224] text-slate-100 font-[Roboto,sans-serif] overflow-hidden">
       <Toaster position="top-right" richColors />
-      
+
       {/* ── Top Header Banner (Matching Reference Image) ── */}
       <header className="flex-shrink-0 relative z-20 border-b border-cyan-500/30 bg-[#071932] shadow-xl overflow-hidden">
         {/* Background Banner Graphic */}
