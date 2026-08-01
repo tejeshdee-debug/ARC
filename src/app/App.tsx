@@ -355,8 +355,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     if (popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance) {
       confirmPayment();
     } else {
-      cardInputRef.current?.focus();
-      toast.info("Please enter Card Number on the right panel to complete payment.");
+      setShowCheckout(true);
     }
   }
 
@@ -418,6 +417,74 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
   return (
     <div className="flex flex-col h-full gap-0">
+
+      {/* ── Checkout Modal Popup (Opened via Order & Pay if card is not pre-swiped) ── */}
+      {showCheckout && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.8)" }}>
+          <div className="bg-[#0a1e38] rounded-2xl border border-cyan-500/40 shadow-2xl w-full max-w-md p-6 relative backdrop-blur-xl">
+            <button onClick={() => setShowCheckout(false)} className="absolute top-4 right-4 text-white/60 hover:text-white font-bold text-lg cursor-pointer">✕</button>
+
+            <div className="text-center mb-4">
+              <div className="inline-flex p-3 rounded-full bg-cyan-500/10 border border-cyan-400/30 mb-2">
+                <CreditCard size={26} className="text-cyan-400" />
+              </div>
+              <h2 className="text-white font-bold text-lg uppercase tracking-wide">Complete POS Checkout</h2>
+              <p className="text-cyan-300/80 text-xs mt-1">Grand Total: <span className="text-amber-400 font-extrabold text-sm">₹{grandTotal.toFixed(2)}</span> ({orderItems.reduce((s, i) => s + i.qty, 0)} items)</p>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-white/70 text-xs font-semibold block mb-1">Card No / P.No / Mobile</label>
+                <input
+                  autoFocus
+                  value={popupCard}
+                  onChange={e => handlePopupCardChange(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && confirmPayment()}
+                  placeholder="e.g. 0001777486 or 44361W"
+                  className="w-full bg-[#061830] border border-cyan-500/40 text-white font-bold text-sm px-3 py-2 rounded outline-none focus:border-cyan-400"
+                />
+              </div>
+
+              {popupSailor && (
+                <div className={`p-3 rounded-xl flex items-center justify-between border ${popupSailor.status === "Active" ? "bg-sky-950/80 border-cyan-500/40" : "bg-red-950/80 border-red-500/40"}`}>
+                  <div>
+                    <p className="text-white font-bold text-sm">{popupSailor.name}</p>
+                    <p className="text-white/60 text-xs">{popupSailor.rank} · {popupSailor.unit} · {popupSailor.type}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-white/50">Available Balance</p>
+                    <p className={`font-extrabold text-sm ${popupSailor.balance >= grandTotal ? "text-cyan-400" : "text-red-400"}`}>
+                      ₹{popupSailor.balance.toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {popupError && (
+                <div className="bg-red-900/60 border border-red-500/60 rounded px-3 py-1.5 text-red-200 text-xs font-semibold">
+                  ⚠ {popupError}
+                </div>
+              )}
+
+              <div className="flex gap-2 mt-2">
+                <button onClick={() => setShowCheckout(false)} className="flex-1 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs font-bold cursor-pointer">
+                  Cancel
+                </button>
+                <button
+                  onClick={confirmPayment}
+                  disabled={!popupSailor || popupSailor.status !== "Active" || grandTotal > popupSailor.balance}
+                  className={`flex-1 py-2 rounded-lg text-white text-xs font-bold transition ${
+                    popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance
+                      ? "bg-sky-600 hover:bg-sky-500 cursor-pointer shadow-lg active:scale-95"
+                      : "bg-sky-900/40 text-white/40 cursor-not-allowed border border-white/10"
+                  }`}>
+                  Confirm & Pay (₹{grandTotal.toFixed(2)})
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Receipt / Success Popup ── */}
       {receipt && (
@@ -721,26 +788,19 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               </div>
             )}
 
-            {/* Payment action button */}
-            <button
-              onClick={confirmPayment}
-              disabled={orderItems.length === 0 || !popupSailor || popupSailor.status !== "Active" || grandTotal > popupSailor.balance}
-              className={`w-full py-2 rounded text-white text-xs font-bold transition flex items-center justify-center gap-1.5 shadow ${orderItems.length > 0 && popupSailor && popupSailor.status === "Active" && grandTotal <= popupSailor.balance
-                ? "bg-sky-600 hover:bg-sky-500 active:scale-95 cursor-pointer"
-                : "bg-sky-900/30 text-white/40 cursor-not-allowed border border-white/10"
-                }`}>
-              <CreditCard size={13} />
-              {orderItems.length === 0
-                ? "Cart Empty"
-                : !popupSailor
-                  ? "Enter Card Number"
-                  : popupSailor.status !== "Active"
-                    ? `Card ${popupSailor.status}`
-                    : grandTotal > popupSailor.balance
-                      ? "Insufficient Balance"
-                      : `Confirm Payment (₹${grandTotal.toFixed(2)})`
-              }
-            </button>
+            {/* Card Swiped Status Indicator */}
+            <div className="mt-1">
+              {popupSailor ? (
+                <div className="text-[10px] font-semibold text-cyan-300 flex items-center justify-between bg-cyan-950/80 px-2 py-1.5 rounded border border-cyan-500/40">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Card Swiped</span>
+                  <span className="text-amber-300 font-bold">Ready for Checkout</span>
+                </div>
+              ) : (
+                <div className="text-[10px] text-white/50 text-center py-1 bg-[#061830] rounded border border-white/10">
+                  Swipe Card or enter Card No above
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Right Panel Tabs: Recent Orders / Live Stock */}
