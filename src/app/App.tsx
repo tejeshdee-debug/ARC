@@ -163,6 +163,45 @@ function POSScreen({ products, setProducts, sailors, setSailors,
     }
   ]);
 
+  const [stockSearch, setStockSearch] = useState("");
+  const [orderSearch, setOrderSearch] = useState("");
+
+  // Load live recent orders from API on mount
+  useEffect(() => {
+    async function loadRecentOrders() {
+      try {
+        const sales = await api.getSalesReport();
+        if (sales && Array.isArray(sales) && sales.length > 0) {
+          const grouped: Record<string, any> = {};
+          sales.forEach((s: any) => {
+            const bNo = s.billNo || "TRN-000";
+            if (!grouped[bNo]) {
+              grouped[bNo] = {
+                id: `ORD-${bNo.slice(-6)}`,
+                billNo: bNo,
+                timestamp: s.date ? (s.date.includes(" ") ? s.date.split(" ")[1] : s.date) : "14:30:00",
+                date: s.date ? s.date.split(" ")[0] : new Date().toLocaleDateString("en-GB"),
+                sailorName: s.name || "Sailor",
+                sailorId: s.customerId || "",
+                total: 0,
+                items: []
+              };
+            }
+            grouped[bNo].items.push({ name: s.item || "Product", qty: s.qty || 1, price: s.price || 0 });
+            grouped[bNo].total += (s.amount || ((s.qty || 1) * (s.price || 0)));
+          });
+          const list = Object.values(grouped);
+          if (list.length > 0) {
+            setRecentOrders(list);
+          }
+        }
+      } catch (err) {
+        console.warn("Using local recent orders list:", err);
+      }
+    }
+    loadRecentOrders();
+  }, []);
+
   // ── Checkout ──
   const [showCheckout, setShowCheckout] = useState(false);
   const [popupCard, setPopupCard] = useState("");
@@ -726,52 +765,84 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               </button>
             </div>
 
-            {/* Tab 1: Recent Orders with Timestamp */}
+            {/* Tab 1: Recent Orders with Timestamp & Filter */}
             {rightPanelTab === "orders" ? (
-              <div className="bg-[#091b33] rounded overflow-auto flex-1 border border-white/10 p-1">
-                {recentOrders.length === 0 ? (
-                  <div className="text-center text-white/40 text-xs py-8">No recent orders yet.</div>
-                ) : (
-                  <div className="flex flex-col gap-1">
-                    {recentOrders.map((ord, i) => (
-                      <div key={i} className="p-2 bg-[#061830] rounded border border-cyan-500/20 hover:border-cyan-400/50 transition">
-                        <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-amber-400">{ord.id}</span>
-                          <span className="font-mono text-cyan-300 font-bold bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-500/30">
-                            ⏱ {ord.timestamp}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-[10px] mt-1">
-                          <span className="text-white font-semibold truncate max-w-[130px]">{ord.sailorName}</span>
-                          <span className="text-cyan-400 font-bold">₹{ord.total.toFixed(2)}</span>
-                        </div>
-                        <div className="text-[9px] text-white/50 truncate mt-0.5">
-                          {ord.items.map((it: any) => `${it.name} ×${it.qty}`).join(", ")}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="flex-1 flex flex-col gap-1 min-h-0">
+                <input
+                  type="text"
+                  value={orderSearch}
+                  onChange={e => setOrderSearch(e.target.value)}
+                  placeholder="🔍 Search orders..."
+                  className="w-full bg-[#091b33] border border-cyan-500/30 text-white text-[10px] px-2 py-1 rounded outline-none placeholder:text-white/40 focus:border-cyan-400"
+                />
+                <div className="bg-[#091b33] rounded overflow-auto flex-1 border border-white/10 p-1">
+                  {recentOrders.filter(ord =>
+                    !orderSearch.trim() ||
+                    ord.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                    ord.sailorName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                    ord.items.some((it: any) => it.name.toLowerCase().includes(orderSearch.toLowerCase()))
+                  ).length === 0 ? (
+                    <div className="text-center text-white/40 text-xs py-8">No matching orders found.</div>
+                  ) : (
+                    <div className="flex flex-col gap-1">
+                      {recentOrders
+                        .filter(ord =>
+                          !orderSearch.trim() ||
+                          ord.id.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                          ord.sailorName.toLowerCase().includes(orderSearch.toLowerCase()) ||
+                          ord.items.some((it: any) => it.name.toLowerCase().includes(orderSearch.toLowerCase()))
+                        )
+                        .map((ord, i) => (
+                          <div key={i} className="p-1.5 bg-[#061830] rounded border border-cyan-500/20 hover:border-cyan-400/50 transition">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-bold text-amber-400">{ord.id}</span>
+                              <span className="font-mono text-cyan-300 font-bold bg-cyan-950 px-1.5 py-0.5 rounded border border-cyan-500/30">
+                                ⏱ {ord.timestamp}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-[10px] mt-1">
+                              <span className="text-white font-semibold truncate max-w-[130px]">{ord.sailorName}</span>
+                              <span className="text-cyan-400 font-bold">₹{ord.total.toFixed(2)}</span>
+                            </div>
+                            <div className="text-[9px] text-white/50 truncate mt-0.5">
+                              {ord.items.map((it: any) => `${it.name} ×${it.qty}`).join(", ")}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
-              /* Tab 2: Live Stock */
-              <div className="bg-white rounded overflow-auto flex-1">
-                <table className="w-full text-[10px] border-collapse">
-                  <thead className="sticky top-0">
-                    <tr className="bg-[#0369a1]">
-                      <th className="text-white font-bold px-2 py-1 text-left">Item</th>
-                      <th className="text-white font-bold px-1 py-1 text-right">Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {products.slice(0, 40).map((p, i) => (
-                      <tr key={p.code} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f0f9ff" }}>
-                        <td className="px-2 py-0.5 text-gray-800 truncate max-w-[120px]">{p.name}</td>
-                        <td className={`px-1 py-0.5 text-right font-semibold ${p.stock < 10 ? "text-red-500" : "text-gray-700"}`}>{p.stock}</td>
+              /* Tab 2: Live Stock with Filter */
+              <div className="flex-1 flex flex-col gap-1 min-h-0">
+                <input
+                  type="text"
+                  value={stockSearch}
+                  onChange={e => setStockSearch(e.target.value)}
+                  placeholder="🔍 Search live stock..."
+                  className="w-full bg-[#091b33] border border-cyan-500/30 text-white text-[10px] px-2 py-1 rounded outline-none placeholder:text-white/40 focus:border-cyan-400"
+                />
+                <div className="bg-white rounded overflow-auto flex-1">
+                  <table className="w-full text-[10px] border-collapse">
+                    <thead className="sticky top-0">
+                      <tr className="bg-[#0369a1]">
+                        <th className="text-white font-bold px-2 py-1 text-left">Item</th>
+                        <th className="text-white font-bold px-1 py-1 text-right">Qty</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {products
+                        .filter(p => !stockSearch.trim() || p.name.toLowerCase().includes(stockSearch.toLowerCase()) || p.code.toLowerCase().includes(stockSearch.toLowerCase()))
+                        .map((p, i) => (
+                          <tr key={p.code} style={{ backgroundColor: i % 2 === 0 ? "#fff" : "#f0f9ff" }}>
+                            <td className="px-2 py-0.5 text-gray-800 truncate max-w-[130px] font-medium">{p.name}</td>
+                            <td className={`px-1 py-0.5 text-right font-bold ${p.stock < 10 ? "text-red-600 bg-red-50" : "text-gray-700"}`}>{p.stock}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
