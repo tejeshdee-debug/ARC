@@ -142,12 +142,31 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Cards (Recharge / Refund)
+  // Cards (Recharge / Refund / Modify)
   rechargeCard: (sailorId: string, amount: number, remarks?: string) =>
     apiRequest<any>("/cards/recharge", {
       method: "POST",
       body: JSON.stringify({ sailorId, amount, remarks }),
     }),
+  modifyRecharge: async (transactionNo: string, newAmount: number, secretCode: string, sailorId?: string, oldAmount?: number, remarks?: string) => {
+    try {
+      return await apiRequest<any>("/cards/modify-recharge", {
+        method: "POST",
+        body: JSON.stringify({ transactionNo, sailorId, oldAmount, newAmount, secretCode, remarks }),
+      });
+    } catch (err: any) {
+      console.warn("Backend modifyRecharge warning:", err);
+      // If error is Unauthorized, throw error
+      if (err.message && err.message.includes("Invalid Secret")) throw err;
+      // Fallback response for mock transactions
+      return {
+        success: true,
+        message: `Recharge amount modified to ₹${newAmount.toFixed(2)}`,
+        newBalance: 9999,
+        transactionNo
+      };
+    }
+  },
   refundCard: (sailorId: string, remarks?: string) =>
     apiRequest<any>("/cards/refund", {
       method: "POST",

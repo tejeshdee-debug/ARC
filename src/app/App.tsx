@@ -7,7 +7,7 @@ import navalBanner from "./naval_banner.jpg";
 import {
   Package, Users, Warehouse, Truck, BarChart2, UserCog, CreditCard,
   Settings, ChevronLeft, ChevronRight, RefreshCw, LogOut, KeyRound,
-  Download, Printer, LayoutDashboard, Tags, Layers,
+  Download, Printer, LayoutDashboard, Tags, Layers, Wifi, Radio, Zap, Volume2, CheckCircle2
 } from "lucide-react";
 import { Toaster, toast } from "sonner";
 import {
@@ -16,6 +16,31 @@ import {
   RECHARGE_REPORT_DATA, REFUND_REPORT_DATA, CARD_REGISTRATION_DATA,
   LOST_CARD_DATA, VENDORS_DATA, INITIAL_USERS, INITIAL_SETTINGS, SAILOR_TYPES
 } from "./mockData";
+
+// ─── Web Audio RFID Beep Generator ────────────────────────────────────────────
+function playRfidBeep(type: 'success' | 'error' = 'success') {
+  try {
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    if (type === 'success') {
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      gain.gain.setValueAtTime(0.15, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } else {
+      osc.frequency.setValueAtTime(300, ctx.currentTime);
+      gain.gain.setValueAtTime(0.2, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.3);
+    }
+  } catch (e) {
+    // Ignore audio permission/context errors
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Screen = "pos" | "products" | "master" | "sailor" | "stock" | "vendor" | "reports" | "user" | "card" | "settings";
@@ -118,11 +143,12 @@ interface POSProps {
   categories?: any[];
   brands?: any[];
   ships?: any[];
+  settings?: any;
 }
 
 function POSScreen({ products, setProducts, sailors, setSailors,
   salesReport, setSalesReport, consoleReport, setConsoleReport,
-  newSalesReport, setNewSalesReport, categories: masterCategories = [], brands: masterBrands = [], ships: masterShips = [] }: POSProps) {
+  newSalesReport, setNewSalesReport, categories: masterCategories = [], brands: masterBrands = [], ships: masterShips = [], settings = {} }: POSProps) {
 
   const [activeCat, setActiveCat] = useState<string>("LIQUOR");
   const [activeSubCat, setActiveSubCat] = useState<string>("ALL");
@@ -180,6 +206,67 @@ function POSScreen({ products, setProducts, sailors, setSailors,
   // ref keeps the matched sailor always in sync (avoids stale-closure bugs)
   const popupSailorRef = useRef<any | null>(null);
   const cardInputRef = useRef<HTMLInputElement>(null);
+
+  // ── RFID Card Reader State & Logic ──
+  const [lastScannedTag, setLastScannedTag] = useState("");
+  const [autoCheckoutOnTap, setAutoCheckoutOnTap] = useState(false);
+  const [rfidFlash, setRfidFlash] = useState(false);
+
+  useEffect(() => {
+    let buffer = "";
+    let lastTime = 0;
+
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+
+      if (e.key === "Enter") {
+        if (buffer.length >= 3) {
+          const scannedCode = buffer.trim();
+          buffer = "";
+          handleRfidScan(scannedCode);
+          if (isInput && target !== cardInputRef.current) {
+            e.preventDefault();
+          }
+        }
+        buffer = "";
+        return;
+      }
+
+      if (e.key.length > 1) return;
+
+      if (now - lastTime > 100 && isInput && target !== cardInputRef.current) {
+        buffer = e.key;
+      } else {
+        buffer += e.key;
+      }
+      lastTime = now;
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [screen, sailors, orderItems, autoCheckoutOnTap]);
+
+  function handleRfidScan(cardId: string) {
+    setLastScannedTag(cardId);
+    handlePopupCardChange(cardId);
+    setRfidFlash(true);
+    setTimeout(() => setRfidFlash(false), 1500);
+
+    const found = sailors.find((s: any) => s.id === cardId || s.pNo === cardId || s.mobile === cardId) || null;
+    if (found) {
+      playRfidBeep("success");
+      toast.success(`💳 RFID Card Tapped: ${found.name}`, {
+        description: `Card ID: ${cardId} | Rank: ${found.rank} | Available: ₹${found.balance.toFixed(2)}`
+      });
+    } else {
+      playRfidBeep("error");
+      toast.warning(`⚡ Scanned Tag UID: ${cardId}`, {
+        description: "No registered sailor matches this card UID. Check Sailor Details."
+      });
+    }
+  }
 
   // ── Receipt popup ──
   const [receipt, setReceipt] = useState<null | {
@@ -389,6 +476,36 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
     if (sailor.status === "Deactive") { setPopupError("Card is DEACTIVATED. Transaction blocked."); return; }
     if (sailor.status === "Lost") { setPopupError("Card is reported LOST. Transaction blocked."); return; }
+
+    // ── Client-side Dynamic Alcohol Billing Limit Check ──
+    const alcoholItems = orderItems.filter(i => {
+      const prod = products.find(p => p.code === i.code);
+      const cat = (prod?.category || "").toUpperCase();
+      const sub = (prod?.sub || i.qtyType || "").toUpperCase();
+      return cat === "LIQUOR" || ["WHISKY", "BEER", "RUM", "VODKA", "WINE", "BRANDY"].includes(sub);
+    });
+
+    const totalAlcoholQty = alcoholItems.reduce((s, i) => s + i.qty, 0);
+    const totalAlcoholAmount = alcoholItems.reduce((s, i) => s + (i.qty * i.price), 0);
+
+    const limitType = settings?.alcoholLimitType || "Quantity";
+    const maxQty = Number(settings?.alcoholMaxQty) || 2;
+    const maxAmt = Number(settings?.alcoholMaxAmount) || 2000;
+
+    if ((limitType === "Quantity" || limitType === "Both") && maxQty > 0 && totalAlcoholQty > maxQty) {
+      const msg = `Alcohol limit exceeded! Maximum allowed quantity per bill is ${maxQty} (Attempted: ${totalAlcoholQty}).`;
+      setPopupError(msg);
+      toast.error(msg);
+      return;
+    }
+
+    if ((limitType === "Amount" || limitType === "Both") && maxAmt > 0 && totalAlcoholAmount > maxAmt) {
+      const msg = `Alcohol limit exceeded! Maximum allowed alcohol amount per bill is ₹${maxAmt.toFixed(2)} (Attempted: ₹${totalAlcoholAmount.toFixed(2)}).`;
+      setPopupError(msg);
+      toast.error(msg);
+      return;
+    }
+
     if (grandTotal > sailor.balance) {
       setPopupError(`Insufficient balance! Need ₹${grandTotal.toFixed(2)}, Available ₹${sailor.balance.toFixed(2)}`);
       return;
@@ -447,29 +564,55 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
       {/* ── Checkout Modal Popup (Opened via Order & Pay if card is not pre-swiped) ── */}
       {showCheckout && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.8)" }}>
-          <div className="bg-[#0a1e38] rounded-2xl border border-cyan-500/40 shadow-2xl w-full max-w-md p-6 relative backdrop-blur-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.85)" }}>
+          <div className="bg-[#0a1e38] rounded-2xl border border-cyan-500/50 shadow-[0_0_50px_rgba(0,180,255,0.25)] w-full max-w-md p-6 relative backdrop-blur-xl">
             <button onClick={() => setShowCheckout(false)} className="absolute top-4 right-4 text-white/60 hover:text-white font-bold text-lg cursor-pointer">✕</button>
 
             <div className="text-center mb-4">
-              <div className="inline-flex p-3 rounded-full bg-cyan-500/10 border border-cyan-400/30 mb-2">
-                <CreditCard size={26} className="text-cyan-400" />
+              <div className="inline-flex p-3 rounded-full bg-cyan-500/10 border border-cyan-400/40 mb-2 relative">
+                <Radio size={28} className="text-cyan-400 animate-pulse" />
+                <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500"></span>
+                </span>
               </div>
-              <h2 className="text-white font-bold text-lg uppercase tracking-wide">Complete POS Checkout</h2>
+              <h2 className="text-white font-extrabold text-lg uppercase tracking-wider">Complete POS Checkout</h2>
               <p className="text-cyan-300/80 text-xs mt-1">Grand Total: <span className="text-amber-400 font-extrabold text-sm">₹{grandTotal.toFixed(2)}</span> ({orderItems.reduce((s, i) => s + i.qty, 0)} items)</p>
+            </div>
+
+            {/* RFID Tap Target Zone */}
+            <div className={`p-4 rounded-xl border transition-all duration-300 text-center mb-3 ${
+              rfidFlash 
+                ? "bg-cyan-500/30 border-cyan-400 shadow-[0_0_30px_rgba(6,182,212,0.5)] scale-105" 
+                : popupSailor 
+                ? "bg-emerald-950/40 border-emerald-500/50" 
+                : "bg-cyan-950/40 border-cyan-500/30"
+            }`}>
+              <div className="flex items-center justify-center gap-2 mb-1">
+                <Radio size={16} className="text-cyan-400 animate-pulse" />
+                <span className="text-xs font-bold text-cyan-300 uppercase tracking-wide">
+                  {popupSailor ? "🟢 RFID Card Connected" : "📡 RFID Reader Ready — Tap Card Now"}
+                </span>
+              </div>
+              <p className="text-[11px] text-white/60">
+                {popupSailor ? `Tag UID: ${popupCard}` : "Touch RFID card to reader or enter Card No below"}
+              </p>
             </div>
 
             <div className="flex flex-col gap-3">
               <div>
-                <label className="text-white/70 text-xs font-semibold block mb-1">Card No / P.No / Mobile</label>
-                <input
-                  autoFocus
-                  value={popupCard}
-                  onChange={e => handlePopupCardChange(e.target.value)}
-                  onKeyDown={e => e.key === "Enter" && confirmPayment()}
-                  placeholder="e.g. 0001777486 or 44361W"
-                  className="w-full bg-[#061830] border border-cyan-500/40 text-white font-bold text-sm px-3 py-2 rounded outline-none focus:border-cyan-400"
-                />
+                <label className="text-white/70 text-xs font-semibold block mb-1">Card No / RFID Tag UID / P.No</label>
+                <div className="relative">
+                  <input
+                    autoFocus
+                    value={popupCard}
+                    onChange={e => handlePopupCardChange(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && confirmPayment()}
+                    placeholder="e.g. 0001777486 or 44361W"
+                    className="w-full bg-[#061830] border border-cyan-500/40 text-white font-bold text-sm px-3 py-2 rounded-lg outline-none focus:border-cyan-400 pl-9"
+                  />
+                  <CreditCard size={16} className="absolute left-3 top-2.5 text-cyan-400/70" />
+                </div>
               </div>
 
               {popupSailor && (
@@ -546,7 +689,9 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               </div>
               <div>
                 <p className="text-gray-800 font-bold text-sm">{receipt.sailor.name}</p>
-                <p className="text-gray-400 text-xs">{receipt.sailor.rank} · {receipt.sailor.unit} · {receipt.sailor.type}</p>
+                <p className="text-gray-500 text-xs">
+                  P.No: <span className="text-cyan-700 font-bold">{receipt.sailor.pNo || receipt.sailor.PNo || "N/A"}</span> · {receipt.sailor.rank} · {receipt.sailor.unit} · {receipt.sailor.type}
+                </p>
               </div>
             </div>
 
@@ -564,7 +709,9 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                   {receipt.items.map((item, i) => (
                     <tr key={i} className="border-b border-gray-50">
                       <td className="py-1.5 text-gray-700 font-medium">{item.name}</td>
-                      <td className="py-1.5 text-center text-gray-500">{item.qty} {item.qtyType}</td>
+                      <td className="py-1.5 text-center text-gray-500">
+                        {item.qty} {isPartyMode || activeCat === "PARTY" || item.qtyType?.toLowerCase().includes("kg") ? "kgs" : item.qtyType || "Btl"}
+                      </td>
                       <td className="py-1.5 text-right text-gray-700 font-semibold">₹{(item.qty * item.price).toFixed(2)}</td>
                     </tr>
                   ))}
@@ -590,7 +737,8 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                 onClick={() => {
                   const w = window.open("", "_blank", "width=400,height=600");
                   if (!w) return;
-                  w.document.write(`<html><head><title>Receipt ${receipt.orderNo}</title><style>body{font-family:monospace;padding:20px;max-width:320px;margin:auto}h2{text-align:center}hr{border:1px dashed #ccc}.row{display:flex;justify-content:space-between;margin:4px 0}.total{font-weight:bold;font-size:1.1em;border-top:2px solid #000;padding-top:6px}.center{text-align:center;color:#555;font-size:.85em}</style></head><body><h2>PAYMENT RECEIPT</h2><p class='center'>${receipt.date}</p><hr><p class='center'><b>Order No: ${receipt.orderNo}</b><br>Bill: ${receipt.billNo}</p><hr><p><b>${receipt.sailor.name}</b><br>${receipt.sailor.rank} · ${receipt.sailor.unit}</p><hr>${receipt.items.map(it => `<div class='row'><span>${it.name} ×${it.qty}</span><span>&#x20B9;${(it.qty * it.price).toFixed(2)}</span></div>`).join('')}<hr><div class='row total'><span>Grand Total</span><span>&#x20B9;${receipt.total.toFixed(2)}</span></div><hr><p class='center'>Thank You!</p></body></html>`);
+                  const pnoStr = receipt.sailor.pNo || receipt.sailor.PNo || "N/A";
+                  w.document.write(`<html><head><title>Receipt ${receipt.orderNo}</title><style>body{font-family:monospace;padding:20px;max-width:320px;margin:auto}h2{text-align:center}hr{border:1px dashed #ccc}.row{display:flex;justify-content:space-between;margin:4px 0}.total{font-weight:bold;font-size:1.1em;border-top:2px solid #000;padding-top:6px}.center{text-align:center;color:#555;font-size:.85em}</style></head><body><h2>PAYMENT RECEIPT</h2><p class='center'>${receipt.date}</p><hr><p class='center'><b>Order No: ${receipt.orderNo}</b><br>Bill: ${receipt.billNo}</p><hr><p><b>${receipt.sailor.name}</b><br>P.No: <b>${pnoStr}</b> | ${receipt.sailor.rank} · ${receipt.sailor.unit}</p><hr>${receipt.items.map(it => `<div class='row'><span>${it.name} ×${it.qty} ${isPartyMode || activeCat === 'PARTY' || it.qtyType?.toLowerCase().includes('kg') ? 'kgs' : ''}</span><span>&#x20B9;${(it.qty * it.price).toFixed(2)}</span></div>`).join('')}<hr><div class='row total'><span>Grand Total</span><span>&#x20B9;${receipt.total.toFixed(2)}</span></div><hr><p class='center'>Thank You!</p></body></html>`);
                   w.document.close(); w.print();
                 }}
                 className="flex-1 py-2.5 rounded-xl border-2 border-gray-200 text-gray-600 text-sm font-semibold hover:bg-gray-100 transition flex items-center justify-center gap-1.5">
@@ -673,9 +821,12 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             {filtered.map((p, i) => (
               <button key={p.code} onClick={() => addToOrder(p)}
                 style={{ backgroundColor: TILE_COLORS[i % TILE_COLORS.length] }}
-                className="p-1.5 rounded text-gray-800 text-[10px] font-bold text-center leading-tight hover:opacity-85 active:scale-95 transition-all min-h-[44px] flex flex-col items-center justify-center">
+                className="p-1.5 rounded text-gray-800 text-[10px] font-bold text-center leading-tight hover:opacity-85 active:scale-95 transition-all min-h-[46px] flex flex-col items-center justify-center relative">
+                <span className="text-[8px] font-black text-blue-900 bg-white/70 px-1 rounded mb-0.5 tracking-wider font-mono">[{p.code}]</span>
                 <span className="truncate w-full">{p.name}</span>
-                <span className="text-[8px] opacity-60">₹{p.price} · Stock:{p.stock}</span>
+                <span className="text-[8px] opacity-75 font-semibold">
+                  ₹{p.price} · Stock:{p.stock} {p.category === "PARTY" || p.sub === "PARTY FOOD" ? "kgs" : ""}
+                </span>
               </button>
             ))}
           </div>
@@ -710,7 +861,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
 
             {(isPartyMode || activeCat === "PARTY") && (
               <span className="bg-amber-500/20 text-amber-300 border border-amber-400/40 text-[10px] font-bold px-2.5 py-0.5 rounded ml-auto flex items-center gap-1">
-                🎉 Party Order Mode (Card Optional)
+                🎉 Party Order Mode (Card Optional - Qty in kgs)
               </span>
             )}
           </div>
@@ -720,7 +871,7 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             <table className="w-full text-xs border-collapse">
               <thead>
                 <tr className="bg-[#0369a1]">
-                  {["Item Description", "Qty", "Price", "Qty Type", "Amount", ""].map(h => (
+                  {["Code", "Item Description", "Qty", "Price", "Qty Type", "Amount", ""].map(h => (
                     <th key={h} className="text-white font-bold px-2 py-1.5 text-left whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -728,29 +879,53 @@ function POSScreen({ products, setProducts, sailors, setSailors,
               <tbody>
                 {orderItems.map((item, i) => (
                   <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                    <td className="px-2 py-1 font-mono font-extrabold text-cyan-800">{item.code}</td>
                     <td className="px-2 py-1 text-gray-800 font-medium">{item.name}</td>
                     <td className="px-2 py-1 text-gray-800">
                       <div className="flex items-center gap-1">
                         <button onClick={() => setOrderItems(p => { const n = [...p]; if (n[i].qty > 1) n[i] = { ...n[i], qty: n[i].qty - 1 }; else n.splice(i, 1); return n; })}
-                          className="w-5 h-5 bg-gray-200 rounded font-bold text-gray-700 hover:bg-gray-300 flex items-center justify-center">−</button>
-                        <span className="w-6 text-center font-semibold">{item.qty}</span>
+                          className="w-5 h-5 bg-gray-200 rounded font-bold text-gray-700 hover:bg-gray-300 flex items-center justify-center cursor-pointer">−</button>
+                        
+                        <input
+                          type="number"
+                          min="1"
+                          value={item.qty}
+                          onChange={e => {
+                            const val = parseInt(e.target.value, 10);
+                            const orig = products.find(p => p.code === item.code);
+                            if (isNaN(val) || val <= 0) {
+                              setOrderItems(p => { const n = [...p]; n[i] = { ...n[i], qty: 1 }; return n; });
+                            } else if (orig && orig.stock < val) {
+                              toast.error(`Not enough stock! Max available: ${orig.stock}`);
+                              setOrderItems(p => { const n = [...p]; n[i] = { ...n[i], qty: orig.stock }; return n; });
+                            } else {
+                              setOrderItems(p => { const n = [...p]; n[i] = { ...n[i], qty: val }; return n; });
+                            }
+                          }}
+                          className="w-12 text-center font-bold text-xs bg-white text-gray-900 border border-cyan-500 rounded py-0.5 outline-none focus:ring-2 focus:ring-cyan-500"
+                        />
+
                         <button onClick={() => {
                           const orig = products.find(p => p.code === item.code);
                           if (orig && orig.stock <= item.qty) { toast.error("Not enough stock!"); return; }
                           setOrderItems(p => { const n = [...p]; n[i] = { ...n[i], qty: n[i].qty + 1 }; return n; });
-                        }} className="w-5 h-5 bg-gray-200 rounded font-bold text-gray-700 hover:bg-gray-300 flex items-center justify-center">+</button>
+                        }} className="w-5 h-5 bg-gray-200 rounded font-bold text-gray-700 hover:bg-gray-300 flex items-center justify-center cursor-pointer">+</button>
                       </div>
                     </td>
                     <td className="px-2 py-1 text-gray-800">₹{item.price.toFixed(2)}</td>
-                    <td className="px-2 py-1 text-gray-800">{item.qtyType}</td>
+                    <td className="px-2 py-1 text-gray-800 font-semibold">
+                      <span className="bg-slate-100 text-slate-800 px-1.5 py-0.5 rounded border border-slate-300 font-bold">
+                        {isPartyMode || activeCat === "PARTY" || item.qtyType?.toLowerCase().includes("kg") ? "kgs" : item.qtyType || "Btl"}
+                      </span>
+                    </td>
                     <td className="px-2 py-1 text-gray-800 font-semibold">₹{(item.qty * item.price).toFixed(2)}</td>
                     <td className="px-2 py-1">
-                      <button onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 font-bold">✕</button>
+                      <button onClick={() => removeItem(i)} className="text-red-500 hover:text-red-700 font-bold cursor-pointer">✕</button>
                     </td>
                   </tr>
                 ))}
                 {orderItems.length === 0 && (
-                  <tr><td colSpan={6} className="text-center text-gray-400 py-10 text-xs">
+                  <tr><td colSpan={7} className="text-center text-gray-400 py-10 text-xs">
                     Click any product tile on the left to add items to the cart.
                   </td></tr>
                 )}
@@ -779,39 +954,58 @@ function POSScreen({ products, setProducts, sailors, setSailors,
         <div className="w-72 flex-shrink-0 flex flex-col gap-2 min-h-0">
 
           {/* Card Payment Panel */}
-          <div className="bg-[#091b33] border border-cyan-500/40 rounded-lg p-2.5 flex flex-col gap-2 shadow-lg">
-            <div className="flex items-center justify-between border-b border-cyan-500/30 pb-1 flex-shrink-0">
+          <div className={`bg-[#091b33] border rounded-lg p-2.5 flex flex-col gap-2 shadow-lg transition-all duration-300 ${
+            rfidFlash ? "border-cyan-400 ring-2 ring-cyan-400/50 shadow-[0_0_20px_rgba(6,182,212,0.4)]" : "border-cyan-500/40"
+          }`}>
+            <div className="flex items-center justify-between border-b border-cyan-500/30 pb-1.5 flex-shrink-0">
               <h3 className="text-white font-bold text-xs flex items-center gap-1.5">
-                <CreditCard size={14} className="text-cyan-400" /> Card Payment
+                <CreditCard size={14} className="text-cyan-400" /> RFID Card Payment
               </h3>
-              <span className="text-cyan-400/70 text-[9px] uppercase tracking-wider font-semibold">Direct POS</span>
+              <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-400/40 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> RFID Ready
+              </span>
             </div>
 
             <div className="flex flex-col gap-1">
-              <label className="text-white/70 text-[10px] font-semibold block uppercase tracking-wider">
-                {isPartyMode || activeCat === "PARTY" ? "Card No (Optional for Party)" : "Card No"}
-              </label>
-              <input
-                ref={cardInputRef}
-                value={popupCard}
-                onChange={e => handlePopupCardChange(e.target.value)}
-                onKeyDown={e => e.key === "Enter" && confirmPayment()}
-                placeholder={isPartyMode || activeCat === "PARTY" ? "Optional for Party Order" : "e.g. 0001777486 or 44361W"}
-                className={`w-full font-bold text-xs px-2 py-1.5 rounded outline-none border transition ${popupSailor
-                  ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
-                  : popupCard.length > 0
-                    ? "bg-red-50 text-gray-900 border-red-400"
-                    : "bg-white text-gray-900 border-gray-300 focus:border-cyan-500"
-                  }`}
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-white/70 text-[10px] font-semibold block uppercase tracking-wider">
+                  {isPartyMode || activeCat === "PARTY" ? "Card No / RFID Tag" : "Card No / RFID Tag"}
+                </label>
+                <button
+                  type="button"
+                  onClick={() => cardInputRef.current?.focus()}
+                  className="text-[9px] text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-0.5">
+                  <Zap size={10} /> Focus Reader
+                </button>
+              </div>
+
+              <div className="relative">
+                <input
+                  ref={cardInputRef}
+                  value={popupCard}
+                  onChange={e => handlePopupCardChange(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && confirmPayment()}
+                  placeholder={isPartyMode || activeCat === "PARTY" ? "Optional for Party Order" : "Tap RFID card or type ID..."}
+                  className={`w-full font-bold text-xs px-2 py-1.5 pr-7 rounded outline-none border transition ${popupSailor
+                    ? "bg-white text-gray-900 border-cyan-500 ring-1 ring-cyan-400"
+                    : popupCard.length > 0
+                      ? "bg-red-50 text-gray-900 border-red-400"
+                      : "bg-white text-gray-900 border-gray-300 focus:border-cyan-500"
+                    }`}
+                />
+                <Radio size={13} className="absolute right-2 top-2 text-cyan-600 animate-pulse" />
+              </div>
+
               {popupCard.length > 0 && !popupSailor && (
-                <p className="text-red-400 text-[10px] font-semibold">✕ Card not found</p>
+                <p className="text-red-400 text-[10px] font-semibold flex items-center gap-1 mt-0.5">
+                  ✕ Card not found. Try tapping again or check Sailor ID.
+                </p>
               )}
             </div>
 
             {/* Customer card info */}
             {popupSailor && (
-              <div className={`rounded p-2 flex items-center gap-2 text-xs ${popupSailor.status === "Active" ? "bg-sky-950/60 border border-cyan-500/40" : "bg-red-950/60 border border-red-500/40"
+              <div className={`rounded p-2 flex items-center gap-2 text-xs ${popupSailor.status === "Active" ? "bg-sky-950/80 border border-cyan-500/50" : "bg-red-950/80 border border-red-500/50"
                 }`}>
                 <div className="w-7 h-7 rounded-full bg-sky-700 flex items-center justify-center flex-shrink-0">
                   <Users size={14} className="text-white" />
@@ -837,10 +1031,13 @@ function POSScreen({ products, setProducts, sailors, setSailors,
             )}
 
             {/* Card Swiped Status Indicator */}
-            <div className="mt-1">
+            <div className="mt-1 flex flex-col gap-1">
               {popupSailor ? (
                 <div className="text-[10px] font-semibold text-cyan-300 flex items-center justify-between bg-cyan-950/80 px-2 py-1.5 rounded border border-cyan-500/40">
-                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></span> Card Swiped</span>
+                  <span className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>RFID Card Swiped</span>
+                  </span>
                   <span className="text-amber-300 font-bold">Ready for Checkout</span>
                 </div>
               ) : (isPartyMode || activeCat === "PARTY") ? (
@@ -849,8 +1046,9 @@ function POSScreen({ products, setProducts, sailors, setSailors,
                   <span className="text-white font-bold">Bill to {selectShip}</span>
                 </div>
               ) : (
-                <div className="text-[10px] text-white/50 text-center py-1 bg-[#061830] rounded border border-white/10">
-                  Swipe Card or enter Card No above
+                <div className="text-[10px] text-cyan-300/80 flex items-center justify-center gap-1.5 py-1.5 bg-[#061830] rounded border border-cyan-500/20">
+                  <Radio size={12} className="text-cyan-400 animate-pulse" />
+                  <span>Tap RFID Card to scan tag UID</span>
                 </div>
               )}
             </div>
@@ -1019,8 +1217,11 @@ function ProductDetails({ products, setProducts, categories = [], brands = [], o
 
   async function handleCreate() {
     if (!code || !name) { toast.error("Code and Name are required!"); return; }
-    if (products.some((p: any) => p.code === code)) { toast.error("Product Code already exists!"); return; }
-    const newProd = { code, name, category, sub: subCategory, price: Number(price) || 0, stock: 0, alertQty: Number(alertQty) || 10 };
+    if (products.some((p: any) => p.code.trim().toLowerCase() === code.trim().toLowerCase())) {
+      toast.error(`Product Code '${code}' already exists! Product Code must be unique.`);
+      return;
+    }
+    const newProd = { code: code.trim().toUpperCase(), name, category, sub: subCategory, price: Number(price) || 0, stock: 0, alertQty: Number(alertQty) || 10 };
     try {
       await api.createProduct(newProd);
     } catch (e: any) { console.warn("API fallback:", e); }
@@ -1095,6 +1296,56 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
 
+  // ── RFID Reader for Assign Card Section ──
+  const [rfidScannedId, setRfidScannedId] = useState("");
+  const rfidInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    let buffer = "";
+    let lastTime = 0;
+
+    const handleAssignKeyDown = (e: KeyboardEvent) => {
+      const now = Date.now();
+      const target = e.target as HTMLElement;
+      const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT");
+
+      if (e.key === "Enter") {
+        if (buffer.length >= 3) {
+          const scannedCode = buffer.trim();
+          buffer = "";
+          setRfidScannedId(scannedCode);
+          setSailorId(scannedCode);
+          playRfidBeep("success");
+          
+          const found = sailors.find((s: any) => s.id === scannedCode || s.pNo === scannedCode);
+          if (found) {
+            loadSailor(found);
+            toast.info(`Sailor auto-loaded for scanned RFID: ${found.name}`);
+          } else {
+            toast.success(`🟢 RFID Card Scanned: ${scannedCode}. Sailor ID populated!`);
+          }
+          if (isInput && target !== rfidInputRef.current) {
+            e.preventDefault();
+          }
+        }
+        buffer = "";
+        return;
+      }
+
+      if (e.key.length > 1) return;
+
+      if (now - lastTime > 100 && isInput && target !== rfidInputRef.current) {
+        buffer = e.key;
+      } else {
+        buffer += e.key;
+      }
+      lastTime = now;
+    };
+
+    window.addEventListener("keydown", handleAssignKeyDown);
+    return () => window.removeEventListener("keydown", handleAssignKeyDown);
+  }, [sailors]);
+
   const filteredSailors = sailors.filter((s: any) =>
     s.name.toLowerCase().includes(searchQ.toLowerCase()) ||
     s.pNo.toLowerCase().includes(searchQ.toLowerCase()) ||
@@ -1106,7 +1357,7 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
     setUnit(s.unit); setSailorType(s.type); setShowSearch(false);
     setPhotoUrl(`https://api.dicebear.com/7.x/bottts/svg?seed=${s.id}`);
   }
-  function handleClear() { setSailorId(""); setSailorName(""); setAddress(""); setMobileNo(""); setRegRefund("50"); setDob("12/05/1985"); setSailorPNo(""); setRank(""); setUnit(""); setSailorType("JUNIOR SAILOR"); setPrintBill(false); setSelected(undefined); setPhotoUrl(null); }
+  function handleClear() { setSailorId(""); setRfidScannedId(""); setSailorName(""); setAddress(""); setMobileNo(""); setRegRefund("50"); setDob("12/05/1985"); setSailorPNo(""); setRank(""); setUnit(""); setSailorType("JUNIOR SAILOR"); setPrintBill(false); setSelected(undefined); setPhotoUrl(null); }
   async function handleCreate() {
     if (!sailorPNo || !sailorName || !mobileNo) { toast.error("P.No, Name, and Mobile are required!"); return; }
     if (sailors.some((s: any) => s.pNo === sailorPNo)) { toast.error("Sailor with this P.No already exists!"); return; }
@@ -1202,11 +1453,68 @@ function SailorDetails({ sailors, setSailors, cardRegistration, setCardRegistrat
 
   return (
     <div>
-      <SectionTitle icon={<Users size={22} />} title="Sailor Details" />
+      <SectionTitle icon={<Users size={22} />} title="Sailor Details & Card Assignment" />
       <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
+
+        {/* RFID Card Assign Banner */}
+        <div className="bg-gradient-to-r from-[#0a2540] via-[#0d345c] to-[#0a2540] rounded-lg p-3.5 mb-4 border border-cyan-500/40 shadow-lg flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-cyan-500/20 border border-cyan-400/50 flex items-center justify-center text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
+              <Radio size={22} className="animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h4 className="text-white font-bold text-sm uppercase tracking-wide">Assign RFID Card Tag</h4>
+                <span className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> RFID Listener Active
+                </span>
+              </div>
+              <p className="text-cyan-200/70 text-xs mt-0.5">
+                Tap any RFID card on your USB Reader to auto-assign Card ID to this sailor registration.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {rfidScannedId ? (
+              <div className="bg-cyan-950/90 border border-cyan-400/60 rounded-lg px-3 py-1.5 flex items-center gap-2">
+                <CreditCard size={16} className="text-cyan-400" />
+                <span className="text-white font-mono font-bold text-xs">Scanned UID: {rfidScannedId}</span>
+                <button 
+                  onClick={() => { setRfidScannedId(""); setSailorId(""); }} 
+                  className="text-white/60 hover:text-white text-xs ml-1 font-bold bg-white/10 hover:bg-white/20 rounded px-1.5 py-0.5">
+                  Clear
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  rfidInputRef.current?.focus();
+                  toast.info("RFID Scanner ready! Please tap the card now.");
+                }}
+                className="bg-cyan-500/20 border border-cyan-400/50 hover:bg-cyan-500/30 text-cyan-300 text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-2 cursor-pointer shadow-md">
+                <Zap size={15} className="text-cyan-400 animate-bounce" /> Tap RFID Card Now
+              </button>
+            )}
+          </div>
+        </div>
+
         <div className="flex gap-6">
           <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-3">
-            <FI label="Sailor ID" value={sailorId} onChange={setSailorId} />
+            <div className="flex flex-col gap-0.5">
+              <label className="text-white text-xs font-semibold">Sailor ID / RFID Tag UID</label>
+              <div className="relative">
+                <input
+                  ref={rfidInputRef}
+                  value={sailorId}
+                  onChange={e => setSailorId(e.target.value)}
+                  placeholder="Tap RFID card or enter ID"
+                  className="w-full bg-white text-gray-900 text-sm px-2 py-1 pr-7 rounded font-bold"
+                />
+                <Radio size={14} className="absolute right-2 top-2 text-cyan-600 animate-pulse" />
+              </div>
+            </div>
             <div className="flex flex-col gap-0.5">
               <label className="text-white text-xs font-semibold">Sailor P No <span className="text-red-300">*</span></label>
               <div className="flex gap-2">
@@ -1441,11 +1749,19 @@ function VendorDetails({ vendors, setVendors, onNavigateTo }: any) {
 }
 
 // ─── Recharge / Refund ────────────────────────────────────────────────────────
-function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport, refundReport, setRefundReport, onNavigateTo }: any) {
+function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport, refundReport, setRefundReport, settings = {}, onNavigateTo }: any) {
   const [tab, setTab] = useState<"recharge" | "refund">("recharge");
   const [rCustId, setRCustId] = useState(""); const [rAvAmt, setRAvAmt] = useState(""); const [rRechAmt, setRRechAmt] = useState(""); const [rPrint, setRPrint] = useState(false);
   const [refCustId, setRefCustId] = useState(""); const [refAvAmt, setRefAvAmt] = useState(""); const [refAmt, setRefAmt] = useState(""); const [refDeposit, setRefDeposit] = useState("50"); const [refPrint, setRefPrint] = useState(false); const [refIsActive, setRefIsActive] = useState(false);
   const [activeSailor, setActiveSailor] = useState<any | null>(null);
+
+  // ── 2-Step Modify Recharge Modal State ──
+  const [modifyTxItem, setModifyTxItem] = useState<any | null>(null);
+  const [modifyStep, setModifyStep] = useState<1 | 2>(1); // Step 1: Secret Code Auth, Step 2: Modification Details
+  const [authCodeInput, setAuthCodeInput] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [modNewAmt, setModNewAmt] = useState("");
+  const [modRemarks, setModRemarks] = useState("");
 
   function handleRechargeIdChange(id: string) { setRCustId(id); const f = sailors.find((s: any) => s.id === id || s.pNo === id); if (f) { setActiveSailor(f); setRAvAmt(f.balance.toFixed(2)); } else { setActiveSailor(null); setRAvAmt(""); } }
   function handleRefundIdChange(id: string) { setRefCustId(id); const f = sailors.find((s: any) => s.id === id || s.pNo === id); if (f) { setActiveSailor(f); setRefAvAmt(f.balance.toFixed(2)); setRefDeposit(String(f.regRefund || 50)); } else { setActiveSailor(null); setRefAvAmt(""); } }
@@ -1468,6 +1784,7 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
     setRechargeReport((prev: any) => [{ sno: prev.length + 1, transactionNo: txNo, customerId: activeSailor.id, name: activeSailor.name, pNo: activeSailor.pNo, category: activeSailor.type, rechAmount: amt }, ...prev]);
     setRCustId(""); setRAvAmt(""); setRRechAmt(""); setActiveSailor(null);
   }
+
   async function handleRefundSubmit() {
     if (!activeSailor) { toast.error("Enter a valid Customer ID!"); return; }
     const balance = activeSailor.balance; const deposit = Number(refDeposit) || 50;
@@ -1486,6 +1803,69 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
     const txNo = "REF-TRN" + Math.floor(10000000 + Math.random() * 90000000);
     setRefundReport((prev: any) => [{ sno: prev.length + 1, transactionNo: txNo, customerId: activeSailor.id, name: activeSailor.name, pNo: activeSailor.pNo, category: activeSailor.type, refundDeposit: refundAmt, date: new Date().toLocaleDateString("en-GB") }, ...prev]);
     setRefCustId(""); setRefAvAmt(""); setRefAmt(""); setRefIsActive(false); setActiveSailor(null);
+  }
+
+  function openModifyFlow(item: any) {
+    setModifyTxItem(item);
+    setModifyStep(1); // Step 1: Secret Code Popup first!
+    setAuthCodeInput("");
+    setAuthError("");
+    setModNewAmt(String(item.rechAmount || 0));
+    setModRemarks("");
+  }
+
+  function handleVerifySecretCode(e?: React.FormEvent) {
+    if (e) e.preventDefault();
+    const expectedCode = settings?.masterSecretCode || "1234";
+    if (authCodeInput.trim() === expectedCode.trim()) {
+      setAuthError("");
+      setModifyStep(2); // Step 2: Proceed to modification details!
+      toast.success("🟢 Secret Code Authorized! Proceed with modification.");
+    } else {
+      setAuthError("Invalid Secret Authentication Code! Access Denied.");
+    }
+  }
+
+  async function handleSaveModification() {
+    if (!modifyTxItem) return;
+    const newAmt = Number(modNewAmt);
+    if (isNaN(newAmt) || newAmt < 0) { toast.error("Enter a valid new amount!"); return; }
+
+    try {
+      const oldAmt = Number(modifyTxItem.rechAmount || 0);
+      const diff = newAmt - oldAmt;
+
+      const res = await api.modifyRecharge(
+        modifyTxItem.transactionNo,
+        newAmt,
+        authCodeInput.trim(),
+        modifyTxItem.customerId,
+        oldAmt,
+        modRemarks
+      );
+      
+      setSailors((prev: any) => prev.map((s: any) => 
+        s.id === modifyTxItem.customerId ? { ...s, balance: Math.max(0, s.balance + diff) } : s
+      ));
+
+      setRechargeReport((prev: any) => prev.map((r: any) => 
+        r.transactionNo === modifyTxItem.transactionNo ? { ...r, rechAmount: newAmt } : r
+      ));
+
+      toast.success(res.message || `Recharge transaction updated to ₹${newAmt.toFixed(2)}!`);
+      closeModifyModal();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to modify recharge amount.");
+    }
+  }
+
+  function closeModifyModal() {
+    setModifyTxItem(null);
+    setModifyStep(1);
+    setAuthCodeInput("");
+    setAuthError("");
+    setModNewAmt("");
+    setModRemarks("");
   }
 
   return (
@@ -1558,7 +1938,15 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
           <span>{tab === "recharge" ? "💳" : "💸"}</span>
           <span>Recent {tab === "recharge" ? "Recharge" : "Refund"} Transactions</span>
         </h3>
-        <Table cols={[
+        <Table cols={tab === "recharge" ? [
+          { key: "transactionNo", label: "Transaction No" },
+          { key: "customerId", label: "Customer ID" },
+          { key: "name", label: "Customer Name" },
+          { key: "type", label: "Type" },
+          { key: "amount", label: "Amount" },
+          { key: "date", label: "Date" },
+          { key: "action", label: "Action" }
+        ] : [
           { key: "transactionNo", label: "Transaction No" },
           { key: "customerId", label: "Customer ID" },
           { key: "name", label: "Customer Name" },
@@ -1573,7 +1961,14 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
               name: r.name || "Sailor",
               type: <span className="bg-sky-700 text-white font-bold px-2 py-0.5 rounded text-xs">RECHARGE</span>,
               amount: <span className="text-cyan-400 font-bold">+₹{Number(r.rechAmount || 0).toFixed(2)}</span>,
-              date: r.date || new Date().toLocaleDateString("en-GB")
+              date: r.date || new Date().toLocaleDateString("en-GB"),
+              action: (
+                <button
+                  onClick={() => openModifyFlow(r)}
+                  className="bg-amber-600 hover:bg-amber-500 text-white font-bold px-2.5 py-1 rounded text-xs flex items-center gap-1 cursor-pointer shadow">
+                  <KeyRound size={12} /> Modify Amount
+                </button>
+              )
             }))
           ) : (
             refundReport.map((r: any) => ({
@@ -1586,6 +1981,97 @@ function RechargeRefund({ sailors, setSailors, rechargeReport, setRechargeReport
             }))
           )} />
       </div>
+
+      {/* ── 2-Step Modify Recharge Amount Modal ── */}
+      {modifyTxItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+          <div className="bg-[#0a1e38] rounded-2xl border-2 border-amber-500/60 shadow-[0_0_60px_rgba(245,158,11,0.35)] w-full max-w-md p-6 relative">
+            <button onClick={closeModifyModal} className="absolute top-4 right-4 text-white/60 hover:text-white font-bold text-lg cursor-pointer">✕</button>
+
+            {/* Step Indicators */}
+            <div className="flex items-center justify-center gap-4 mb-4 border-b border-amber-500/20 pb-3">
+              <div className={`flex items-center gap-1.5 text-xs font-extrabold ${modifyStep === 1 ? "text-amber-400" : "text-emerald-400"}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${modifyStep === 1 ? "bg-amber-500 text-slate-900" : "bg-emerald-500 text-slate-900"}`}>1</span>
+                <span>Secret Code Auth</span>
+              </div>
+              <ChevronRight size={14} className="text-white/40" />
+              <div className={`flex items-center gap-1.5 text-xs font-extrabold ${modifyStep === 2 ? "text-amber-400" : "text-white/40"}`}>
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[11px] font-bold ${modifyStep === 2 ? "bg-amber-500 text-slate-900" : "bg-white/20 text-white/60"}`}>2</span>
+                <span>Modification Details</span>
+              </div>
+            </div>
+
+            {/* ── STEP 1: Secret Code Entry Popup First ── */}
+            {modifyStep === 1 && (
+              <form onSubmit={handleVerifySecretCode} className="flex flex-col gap-4">
+                <div className="text-center">
+                  <div className="inline-flex p-3 rounded-full bg-amber-500/10 border border-amber-500/40 mb-2">
+                    <KeyRound size={28} className="text-amber-400 animate-pulse" />
+                  </div>
+                  <h3 className="text-white font-black text-lg uppercase tracking-wide">Enter Secret Code</h3>
+                  <p className="text-cyan-200/70 text-xs mt-1">
+                    Master authorization required to modify transaction <span className="font-mono text-amber-300 font-bold">{modifyTxItem.transactionNo}</span>
+                  </p>
+                </div>
+
+                <div>
+                  <label className="text-white text-xs font-semibold block mb-1.5">
+                    Secret Authentication Code <span className="text-red-400">*</span>
+                  </label>
+                  <input
+                    type="password"
+                    autoFocus
+                    value={authCodeInput}
+                    onChange={e => { setAuthCodeInput(e.target.value); setAuthError(""); }}
+                    placeholder="Enter Secret Code (e.g. 1234)"
+                    className="w-full bg-[#061830] text-white font-bold text-base px-3 py-2.5 rounded-lg border border-amber-500/60 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/40 text-center tracking-widest"
+                  />
+                  {authError && (
+                    <p className="text-red-400 text-xs font-bold mt-1.5 text-center flex items-center justify-center gap-1 bg-red-950/60 p-2 rounded border border-red-500/40">
+                      ✕ {authError}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex gap-3 mt-2">
+                  <Btn variant="neutral" onClick={closeModifyModal} className="flex-1">Cancel</Btn>
+                  <button
+                    type="submit"
+                    className="flex-1 bg-amber-600 hover:bg-amber-500 text-white font-extrabold py-2.5 rounded-lg text-xs cursor-pointer shadow-lg transition flex items-center justify-center gap-1.5">
+                    <KeyRound size={15} /> Authorize & Continue
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* ── STEP 2: Modification Details Form (Shown ONLY after successful auth) ── */}
+            {modifyStep === 2 && (
+              <div className="flex flex-col gap-3">
+                <div className="flex items-center gap-2 text-emerald-400 font-extrabold text-sm border-b border-emerald-500/30 pb-2">
+                  <CheckCircle2 size={18} className="text-emerald-400" /> Authorized — Update Transaction Details
+                </div>
+
+                <FI label="Transaction No" value={modifyTxItem.transactionNo} readOnly />
+                <FI label="Customer Name" value={`${modifyTxItem.name} (${modifyTxItem.customerId})`} readOnly />
+                <FI label="Original Recharge Amount (₹)" value={`₹${Number(modifyTxItem.rechAmount).toFixed(2)}`} readOnly />
+                
+                <FI label="New Recharge Amount (₹)" value={modNewAmt} onChange={setModNewAmt} type="number" required />
+                <FI label="Modification Remarks" value={modRemarks} onChange={setModRemarks} placeholder="Reason for modification" />
+
+                <div className="flex gap-3 mt-3">
+                  <Btn variant="neutral" onClick={() => setModifyStep(1)} className="flex-1">Back</Btn>
+                  <button
+                    type="button"
+                    onClick={handleSaveModification}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold py-2.5 rounded-lg text-xs cursor-pointer shadow-lg transition flex items-center justify-center gap-1.5">
+                    ✓ Save Modification
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1778,13 +2264,17 @@ function SettingsScreen({ settings, setSettings, onNavigateTo }: any) {
           </div>
         </div>
         <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
-          <h3 className="text-green-300 font-bold text-sm mb-3">POS Configuration</h3>
+          <h3 className="text-green-300 font-bold text-sm mb-3">POS & Alcohol Rules Configuration</h3>
           <div className="flex flex-col gap-2">
-            <FI label="POS Name" value={settings.posName} onChange={v => fc("posName", v)} />
-            <FI label="POS IP Address" value={settings.posIpAddress} onChange={v => fc("posIpAddress", v)} />
-            <FI label="Receipt Header" value={settings.receiptHeader} onChange={v => fc("receiptHeader", v)} />
-            <FI label="Receipt Footer" value={settings.receiptFooter} onChange={v => fc("receiptFooter", v)} />
-            <FI label="Tax Rate (%)" value={String(settings.taxRate)} onChange={v => fc("taxRate", Number(v) || 0)} />
+            <FI label="POS Name" value={settings.posName || "POS-1"} onChange={v => fc("posName", v)} />
+            <FI label="POS IP Address" value={settings.posIpAddress || "192.168.1.105"} onChange={v => fc("posIpAddress", v)} />
+            <FS label="Alcohol Limit Type" value={settings.alcoholLimitType || "Quantity"} onChange={v => fc("alcoholLimitType", v)} options={["Quantity", "Amount", "Both", "None"]} />
+            <FI label="Max Alcohol Quantity (per bill)" value={String(settings.alcoholMaxQty ?? 2)} onChange={v => fc("alcoholMaxQty", Number(v) || 0)} type="number" />
+            <FI label="Max Alcohol Amount (₹ per bill)" value={String(settings.alcoholMaxAmount ?? 2000)} onChange={v => fc("alcoholMaxAmount", Number(v) || 0)} type="number" />
+            <FI label="Master Secret Auth Code (Recharge Edit)" value={settings.masterSecretCode || "1234"} onChange={v => fc("masterSecretCode", v)} />
+            <FI label="Receipt Header" value={settings.receiptHeader || ""} onChange={v => fc("receiptHeader", v)} />
+            <FI label="Receipt Footer" value={settings.receiptFooter || ""} onChange={v => fc("receiptFooter", v)} />
+            <FI label="Tax Rate (%)" value={String(settings.taxRate || 0)} onChange={v => fc("taxRate", Number(v) || 0)} />
           </div>
         </div>
         <div className="bg-[#091b33] rounded-lg p-4 border border-white/30">
@@ -2374,7 +2864,7 @@ function AppShell({ currentUser, onLogout }: { currentUser: { username: string; 
   const screenMap: Record<Screen, React.ReactNode> = {
     pos: <POSScreen products={products} setProducts={setProducts} sailors={sailors} setSailors={setSailors}
       salesReport={salesReport} setSalesReport={setSalesReport} consoleReport={consoleReport} setConsoleReport={setConsoleReport}
-      newSalesReport={newSalesReport} setNewSalesReport={setNewSalesReport} categories={categories} brands={brands} />,
+      newSalesReport={newSalesReport} setNewSalesReport={setNewSalesReport} categories={categories} brands={brands} settings={settings} />,
     products: <ProductDetails products={products} setProducts={setProducts} categories={categories} brands={brands} onNavigateTo={setScreen} />,
     master: <MasterScreen categories={categories} setCategories={setCategories} brands={brands} setBrands={setBrands} ships={ships} setShips={setShips} ranks={ranks} setRanks={setRanks} onNavigateTo={setScreen} />,
     sailor: <SailorDetails sailors={sailors} setSailors={setSailors} cardRegistration={cardRegistration} setCardRegistration={setCardRegistration} onNavigateTo={setScreen} />,
